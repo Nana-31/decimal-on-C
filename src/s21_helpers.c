@@ -156,35 +156,45 @@ int s21_bigint_cmp_abs(const s21_decimal *a, const s21_decimal *b) {
 
 /**
  * @brief Складывает мантиссы двух чисел как беззнаковые 96-битные целые числа.
- * @param a Указатель на первое слагаемое.
- * @param b Указатель на второе слагаемое.
- * @param result Указатель на структуру для записи результата.
- * @return int S21_OK при успехе, S21_ERROR_TOO_LARGE при переполнении 96 бит.
- * @todo Реализовать сложение с учетом переноса разряда (carry).
  */
 int s21_bigint_add(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
-  (void)a;
-  (void)b;
-  (void)result;
-  // TODO: Реализовать сложение с учетом переноса разряда (carry)
-  return S21_ERROR_TOO_LARGE;
+  if (!a || !b || !result) return S21_ERROR_CALCULATION;
+
+  s21_decimal_zero(result);
+  uint64_t carry = 0;
+
+  for (int i = 0; i < 3; i++) {
+    uint64_t sum = (uint64_t)a->bits[i] + (uint64_t)b->bits[i] + carry;
+    result->bits[i] = (uint32_t)(sum & 0xFFFFFFFF);
+    carry = sum >> 32;
+  }
+
+  return (carry > 0) ? S21_ERROR_TOO_LARGE : S21_OK;
 }
 
 /**
  * @brief Вычитает мантиссу b из мантиссы a как беззнаковые 96-битные числа.
- * @param a Указатель на уменьшаемое.
- * @param b Указатель на вычитаемое.
- * @param result Указатель на структуру для записи результата.
- * @return int S21_OK при успехе.
- * @todo Реализовать вычитание с учетом займа (borrow).
+ * @note Предполагается, что |a| >= |b|.
  */
 int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
-  (void)a;
-  (void)b;
-  (void)result;
-  // TODO: Реализовать вычитание с учетом займа (borrow)
+  if (!a || !b || !result) return S21_ERROR_CALCULATION;
+
+  s21_decimal_zero(result);
+  int borrow = 0;
+
+  for (int i = 0; i < 3; i++) {
+    int64_t diff = (int64_t)a->bits[i] - (int64_t)b->bits[i] - borrow;
+    if (diff < 0) {
+      diff += 0x100000000LL;
+      borrow = 1;
+    } else {
+      borrow = 0;
+    }
+    result->bits[i] = (uint32_t)diff;
+  }
+
   return S21_OK;
 }
 
@@ -219,26 +229,87 @@ int s21_div_mantissa_by_10(s21_decimal *value, int *remainder) {
 
 /**
  * @brief Сдвигает 96-битную мантиссу числа влево на указанное количество бит.
- * @param value Указатель на число.
- * @param shift_bits Количество бит для сдвига (0 <= shift_bits <= 96).
- * @todo Реализовать побитовый сдвиг с переносом между блоками.
+ * @note Знак и scale не изменяются. Биты, выходящие за пределы 96 бит,
+ * теряются.
  */
 void s21_bigint_shift_left(s21_decimal *value, int shift_bits) {
-  (void)value;
-  (void)shift_bits;
-  // TODO: Реализовать побитовый сдвиг с переносом между блоками
+  if (!value || shift_bits <= 0) return;
+
+  if (shift_bits >= 96) {
+    // Если сдвиг >= 96 бит, обнуляем мантиссу.
+    value->bits[0] = 0;
+    value->bits[1] = 0;
+    value->bits[2] = 0;
+    return;
+  }
+
+  // Оптимизация: сдвиг на целое количество 32-битных блоков.
+  int block_shift = shift_bits / 32;
+  int bit_shift = shift_bits % 32;
+
+  if (block_shift > 0) {
+    // Сдвигаем блоки от старшего к младшему.
+    for (int i = 2; i >= block_shift; i--) {
+      value->bits[i] = value->bits[i - block_shift];
+    }
+    // Обнуляем младшие блоки.
+    for (int i = 0; i < block_shift; i++) {
+      value->bits[i] = 0;
+    }
+  }
+
+  // Побитовый сдвиг внутри блоков (от старшего к младшему).
+  if (bit_shift > 0) {
+    for (int i = 2; i >= 0; i--) {
+      uint64_t temp = (uint64_t)value->bits[i] << bit_shift;
+      value->bits[i] = (uint32_t)(temp & 0xFFFFFFFF);
+      if (i < 2) {
+        // Переносим старшие биты в следующий (старший) блок.
+        value->bits[i + 1] |= (uint32_t)(temp >> 32);
+      }
+    }
+  }
 }
 
 /**
  * @brief Сдвигает 96-битную мантиссу числа вправо на указанное количество бит.
- * @param value Указатель на число.
- * @param shift_bits Количество бит для сдвига (0 <= shift_bits <= 96).
- * @todo Реализовать побитовый сдвиг с переносом между блоками.
+ * @note Знак и scale не изменяются. Освобождающиеся старшие биты заполняются
+ * нулями.
  */
 void s21_bigint_shift_right(s21_decimal *value, int shift_bits) {
-  (void)value;
-  (void)shift_bits;
-  // TODO: Реализовать побитовый сдвиг с переносом между блоками
+  if (!value || shift_bits <= 0) return;
+
+  if (shift_bits >= 96) {
+    // Если сдвиг >= 96 бит, обнуляем мантиссу.
+    value->bits[0] = 0;
+    value->bits[1] = 0;
+    value->bits[2] = 0;
+    return;
+  }
+
+  // Оптимизация: сдвиг на целое количество 32-битных блоков.
+  int block_shift = shift_bits / 32;
+  int bit_shift = shift_bits % 32;
+
+  if (block_shift > 0) {
+    // Сдвигаем блоки.
+    for (int i = 0; i < 3 - block_shift; i++) {
+      value->bits[i] = value->bits[i + block_shift];
+    }
+    // Обнуляем старшие блоки.
+    for (int i = 3 - block_shift; i < 3; i++) {
+      value->bits[i] = 0;
+    }
+  }
+
+  // Побитовый сдвиг внутри блоков.
+  if (bit_shift > 0) {
+    for (int i = 0; i < 3; i++) {
+      uint64_t temp = ((uint64_t)value->bits[i]) |
+                      ((i < 2) ? ((uint64_t)value->bits[i + 1] << 32) : 0);
+      value->bits[i] = (uint32_t)(temp >> bit_shift);
+    }
+  }
 }
 
 /* ======================================================================== */
@@ -247,32 +318,53 @@ void s21_bigint_shift_right(s21_decimal *value, int shift_bits) {
 
 /**
  * @brief Приводит два числа к общему масштабу (scale).
- * @param a Указатель на первое число (будет изменено).
- * @param b Указатель на второе число (будет изменено).
- * @return int S21_OK при успехе, S21_ERROR_CALCULATION при невозможности
- * выравнивания.
- * @todo Реализовать умножение мантиссы на 10 в цикле до выравнивания scale.
  */
 int s21_normalize(s21_decimal *a, s21_decimal *b) {
-  (void)a;
-  (void)b;
-  // TODO: Реализовать умножение мантиссы на 10 в цикле до выравнивания scale
-  return S21_ERROR_CALCULATION;
+  if (!a || !b) return S21_ERROR_CALCULATION;
+
+  int scale_a = s21_get_scale(a);
+  int scale_b = s21_get_scale(b);
+
+  // Умножаем число с меньшим scale на 10, пока scale не сравняются
+  while (scale_a < scale_b) {
+    if (s21_mul_mantissa_by_10(a) != S21_OK) {
+      return S21_ERROR_CALCULATION;  // Переполнение при нормализации
+    }
+    scale_a = s21_get_scale(a);
+  }
+
+  while (scale_b < scale_a) {
+    if (s21_mul_mantissa_by_10(b) != S21_OK) {
+      return S21_ERROR_CALCULATION;
+    }
+    scale_b = s21_get_scale(b);
+  }
+
+  return S21_OK;
 }
 
 /**
  * @brief Умножает мантиссу числа на 10 и увеличивает его scale на 1.
- * @param value Указатель на число.
- * @return int S21_OK при успехе, S21_ERROR_TOO_LARGE при переполнении 96 бит
- *         или если scale уже равен 28.
- * @todo Реализовать умножение каждого блока на 10 с учетом переноса и проверкой
- * scale.
  */
 int s21_mul_mantissa_by_10(s21_decimal *value) {
-  (void)value;
-  // TODO: Реализовать умножение каждого блока на 10 с учетом переноса и
-  // проверкой scale
-  return S21_ERROR_TOO_LARGE;
+  if (!value) return S21_ERROR_CALCULATION;
+
+  int scale = s21_get_scale(value);
+  if (scale >= 28) return S21_ERROR_TOO_LARGE;  // Превышен максимальный scale
+
+  uint64_t carry = 0;
+  for (int i = 0; i < 3; i++) {
+    uint64_t temp = (uint64_t)value->bits[i] * 10 + carry;
+    value->bits[i] = (uint32_t)(temp & 0xFFFFFFFF);
+    carry = temp >> 32;
+  }
+
+  if (carry > 0) {
+    return S21_ERROR_TOO_LARGE;  // Переполнение 96-битной мантиссы
+  }
+
+  s21_set_scale(value, scale + 1);
+  return S21_OK;
 }
 
 /**
