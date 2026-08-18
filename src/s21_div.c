@@ -12,7 +12,8 @@
  * @param value_1 Делимое.
  * @param value_2 Делитель.
  * @param result Указатель на структуру для записи результата.
- * @return int S21_OK при успехе, S21_ERROR_DIV_BY_ZERO при делении на ноль.
+ * @return int S21_OK при успехе, S21_ERROR_DIV_BY_ZERO при делении на ноль,
+ *         S21_ERROR_TOO_LARGE при переполнении.
  */
 int s21_div(s21_decimal value_1, s21_decimal value_2, s21_decimal *result) {
   if (!result) return S21_ERROR_CALCULATION;
@@ -79,7 +80,7 @@ int s21_div(s21_decimal value_1, s21_decimal value_2, s21_decimal *result) {
     // Сдвигаем уже найденное частное влево (умножаем на 10)
     s21_mul_mantissa_by_10(&quotient);
 
-    // Находим следующую цифру частного (она будет от 1 до 9)
+    // Находим следующую цифру частного (она будет от 0 до 9)
     int digit = 0;
     while (s21_bigint_cmp_abs(&current_N, &D) >= 0) {
       s21_bigint_sub(&current_N, &D, &current_N);
@@ -91,7 +92,53 @@ int s21_div(s21_decimal value_1, s21_decimal value_2, s21_decimal *result) {
     s21_bigint_add(&quotient, &digit_dec, &quotient);
   }
 
-  // 4. Формируем итоговый результат
+  // 4. Банковское округление, если после достижения scale=28 остался остаток
+  if (!s21_is_zero(&current_N)) {
+    // Нам нужно узнать, больше ли остаток половины делителя, равен или меньше.
+    // Сравниваем (current_N * 2) с D. Делаем это вручную, чтобы избежать
+    // ложного S21_ERROR_TOO_LARGE от s21_bigint_add при переполнении 96-го
+    // бита.
+
+    int cmp = 0;
+    if (current_N.bits[2] >> 31) {
+      // Если при сдвиге влево есть перенос за пределы 96 бит,
+      // значит current_N * 2 > 2^96, что заведомо больше любого 96-битного D.
+      cmp = 1;
+    } else {
+      s21_decimal current_N_x2;
+      current_N_x2.bits[0] = current_N.bits[0] << 1;
+      current_N_x2.bits[1] =
+          (current_N.bits[1] << 1) | (current_N.bits[0] >> 31);
+      current_N_x2.bits[2] =
+          (current_N.bits[2] << 1) | (current_N.bits[1] >> 31);
+      current_N_x2.bits[3] = 0;
+      cmp = s21_bigint_cmp_abs(&current_N_x2, &D);
+    }
+
+    int round_up = 0;
+    if (cmp > 0) {
+      // Остаток строго больше половины делителя (> 0.5)
+      round_up = 1;
+    } else if (cmp == 0) {
+      // Остаток ровно половина делителя (== 0.5)
+      // Проверяем четность последней цифры частного для банковского округления
+      uint32_t last_digit = quotient.bits[0] % 10;
+      if (last_digit % 2 != 0) {
+        round_up = 1;  // Округляем к ближайшему четному (увеличиваем нечетное)
+      }
+    }
+    // Если cmp < 0, round_up остается 0 (< 0.5, округляем вниз)
+
+    if (round_up) {
+      s21_decimal one = {{1, 0, 0, 0}};
+      // Если при округлении произошло переполнение 96 бит, это ошибка
+      if (s21_bigint_add(&quotient, &one, &quotient) != S21_OK) {
+        return S21_ERROR_TOO_LARGE;
+      }
+    }
+  }
+
+  // 5. Формируем итоговый результат
   result->bits[0] = quotient.bits[0];
   result->bits[1] = quotient.bits[1];
   result->bits[2] = quotient.bits[2];
