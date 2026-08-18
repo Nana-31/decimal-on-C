@@ -30,10 +30,8 @@ int s21_mul(s21_decimal value_1, s21_decimal value_2, s21_decimal *result) {
   int result_scale = scale1 + scale2;
 
   // 3. Умножаем мантиссы (96 бит * 96 бит = до 192 бит)
-  // Используем массив из 6 uint32_t для хранения 192-битного результата
   uint32_t temp_result[6] = {0};
 
-  // Базовое умножение "столбиком"
   for (int i = 0; i < 3; i++) {
     uint64_t carry = 0;
     for (int j = 0; j < 3; j++) {
@@ -47,32 +45,68 @@ int s21_mul(s21_decimal value_1, s21_decimal value_2, s21_decimal *result) {
     }
   }
 
-  // 4. Нормализуем результат, если он не помещается в 96 бит
-  // ИЛИ если итоговый scale превышает максимально допустимый (28)
+  // 4. Нормализация с банковским округлением
+  int last_remainder = 0;
+  int was_non_zero_remainder = 0;
+
   while (result_scale > 28 || temp_result[3] != 0 || temp_result[4] != 0 ||
          temp_result[5] != 0) {
     if (result_scale == 0) {
-      // Если scale уже 0, а число все еще не помещается в 96 бит — это
-      // переполнение
       return S21_ERROR_TOO_LARGE;
     }
 
-    // Делим 192-битное число на 10
     uint64_t remainder = 0;
     for (int i = 5; i >= 0; i--) {
       uint64_t current = (remainder << 32) | temp_result[i];
       temp_result[i] = (uint32_t)(current / 10);
       remainder = current % 10;
     }
+
+    if (remainder > 0) {
+      was_non_zero_remainder = 1;
+    }
+    last_remainder = (int)remainder;
     result_scale--;
   }
 
-  // 5. Копируем результат в структуру (только младшие 96 бит)
+  // 5. Применяем банковское округление к полученной 96-битной мантиссе
+  int round_up = 0;
+  if (last_remainder > 5) {
+    round_up = 1;
+  } else if (last_remainder == 5) {
+    if (was_non_zero_remainder) {
+      round_up = 1;  // Дробная часть строго больше 0.5 (например, 0.500...001)
+    } else {
+      // Дробная часть ровно 0.5. Округляем к ближайшему четному.
+      // Проверяем, является ли младший бит 96-битного числа нечетным.
+      if (temp_result[0] & 1) {
+        round_up = 1;
+      }
+    }
+  }
+
+  if (round_up) {
+    // Прибавляем 1 к 96-битному числу с обработкой переноса
+    uint64_t sum = (uint64_t)temp_result[0] + 1;
+    temp_result[0] = (uint32_t)sum;
+    if (sum > 0xFFFFFFFF) {
+      sum = (uint64_t)temp_result[1] + 1;
+      temp_result[1] = (uint32_t)sum;
+      if (sum > 0xFFFFFFFF) {
+        if (temp_result[2] == 0xFFFFFFFF) {
+          return S21_ERROR_TOO_LARGE;  // Переполнение 96 бит после округления
+        }
+        temp_result[2] += 1;
+      }
+    }
+  }
+
+  // 6. Копируем результат в структуру
   result->bits[0] = temp_result[0];
   result->bits[1] = temp_result[1];
   result->bits[2] = temp_result[2];
 
-  // 6. Устанавливаем scale и знак
+  // 7. Устанавливаем scale и знак
   s21_set_scale(result, result_scale);
   s21_set_sign(result, result_sign);
 
