@@ -20,9 +20,26 @@
  * @param dst Указатель на структуру для записи результата.
  * @return int S21_OK при успехе, S21_ERROR_CONVERSION при ошибке.
  */
+ 
 int s21_from_int_to_decimal(int src, s21_decimal *dst) {
-  (void)src;
-  (void)dst;
-  // TODO: Реализация конвертации
-  return S21_OK;
+  int error_code = S21_OK;
+
+  if (dst ==NULL){
+    error_code=S21_ERROR_CONVERSION;
+  }else{
+    dst->bits[0]=0;
+    dst->bits[1]=0;
+    dst->bits[2]=0;
+    dst->bits[3]=0;
+
+    if (src<0){
+      dst->bits[3] |= (1U<<31);
+      dst->bits[0]= ~(unsigned int)src+1u;
+    }else{
+      dst->bits[0]= (unsigned int)src;
+    }
+    
+  }
+
+  return error_code;
 }

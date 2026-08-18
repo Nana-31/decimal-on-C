@@ -2,6 +2,7 @@
 #define S21_DECIMAL_H_
 
 #include <stdint.h>
+#include <stddef.h>
 
 /**
  * @brief Коды возврата функций библиотеки s21_decimal.
