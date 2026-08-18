@@ -7,13 +7,12 @@
 
 #include "../s21_decimal.h"
 
-Suite *s21_mul_div_suite(void)
-{
-    Suite *s = suite_create("s21_mul_div");
-    TCase *tc_core = tcase_create("Core");
+Suite *s21_mul_div_suite(void) {
+  Suite *s = suite_create("s21_mul_div");
+  TCase *tc_core = tcase_create("Core");
 
-    // TODO: Dev 1 (Математик) - добавляйте тесты для mul, div
+  // TODO: Dev 1 (Математик) - добавляйте тесты для mul, div
 
-    suite_add_tcase(s, tc_core);
-    return s;
+  suite_add_tcase(s, tc_core);
+  return s;
 }

@@ -72,39 +72,38 @@ Suite *s21_rounding_suite(void);
  * @return int EXIT_SUCCESS (0), если все тесты пройдены успешно,
  *         иначе EXIT_FAILURE (1).
  */
-int main(void)
-{
-    int number_failed;
-    Suite *current_suite;
+int main(void) {
+  int number_failed;
+  Suite *current_suite;
 
-    // Создаем тестовый раннер и добавляем ПЕРВЫМ сьют хелперов (это фундамент)
-    SRunner *test_runner = srunner_create(s21_helpers_suite());
+  // Создаем тестовый раннер и добавляем ПЕРВЫМ сьют хелперов (это фундамент)
+  SRunner *test_runner = srunner_create(s21_helpers_suite());
 
-    // Добавляем остальные тестовые сьюты в раннер
-    current_suite = s21_add_sub_suite();
-    srunner_add_suite(test_runner, current_suite);
+  // Добавляем остальные тестовые сьюты в раннер
+  current_suite = s21_add_sub_suite();
+  srunner_add_suite(test_runner, current_suite);
 
-    current_suite = s21_mul_div_suite();
-    srunner_add_suite(test_runner, current_suite);
+  current_suite = s21_mul_div_suite();
+  srunner_add_suite(test_runner, current_suite);
 
-    current_suite = s21_comparison_suite();
-    srunner_add_suite(test_runner, current_suite);
+  current_suite = s21_comparison_suite();
+  srunner_add_suite(test_runner, current_suite);
 
-    current_suite = s21_converters_suite();
-    srunner_add_suite(test_runner, current_suite);
+  current_suite = s21_converters_suite();
+  srunner_add_suite(test_runner, current_suite);
 
-    current_suite = s21_rounding_suite();
-    srunner_add_suite(test_runner, current_suite);
+  current_suite = s21_rounding_suite();
+  srunner_add_suite(test_runner, current_suite);
 
-    // Запускаем все тесты с нормальным уровнем вывода (CK_NORMAL)
-    srunner_run_all(test_runner, CK_NORMAL);
+  // Запускаем все тесты с нормальным уровнем вывода (CK_NORMAL)
+  srunner_run_all(test_runner, CK_NORMAL);
 
-    // Получаем количество проваленных тестов
-    number_failed = srunner_ntests_failed(test_runner);
+  // Получаем количество проваленных тестов
+  number_failed = srunner_ntests_failed(test_runner);
 
-    // Освобождаем ресурсы, выделенные под тестовый раннер
-    srunner_free(test_runner);
+  // Освобождаем ресурсы, выделенные под тестовый раннер
+  srunner_free(test_runner);
 
-    // Возвращаем EXIT_SUCCESS, если все тесты пройдены, иначе EXIT_FAILURE
-    return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+  // Возвращаем EXIT_SUCCESS, если все тесты пройдены, иначе EXIT_FAILURE
+  return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

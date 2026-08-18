@@ -18,13 +18,13 @@
  * @param value_1 Первое слагаемое.
  * @param value_2 Второе слагаемое.
  * @param result Указатель на структуру для записи результата.
- * @return int S21_OK при успехе, S21_ERROR_TOO_LARGE или S21_ERROR_TOO_SMALL при переполнении.
+ * @return int S21_OK при успехе, S21_ERROR_TOO_LARGE или S21_ERROR_TOO_SMALL
+ * при переполнении.
  */
-int s21_add(s21_decimal value_1, s21_decimal value_2, s21_decimal *result)
-{
-    (void)value_1;
-    (void)value_2;
-    (void)result;
-    // TODO: Реализация сложения
-    return S21_OK;
+int s21_add(s21_decimal value_1, s21_decimal value_2, s21_decimal *result) {
+  (void)value_1;
+  (void)value_2;
+  (void)result;
+  // TODO: Реализация сложения
+  return S21_OK;
 }

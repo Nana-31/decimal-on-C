@@ -43,15 +43,14 @@
  * @brief Создает тестовый сьют для преобразователей типов.
  * @return Suite* Указатель на созданный тестовый сьют.
  */
-Suite *s21_converters_suite(void)
-{
-    Suite *s = suite_create("s21_converters");
-    TCase *tc_core = tcase_create("Core");
+Suite *s21_converters_suite(void) {
+  Suite *s = suite_create("s21_converters");
+  TCase *tc_core = tcase_create("Core");
 
-    // TODO: Dev 3 - добавляйте тесты здесь через tcase_add_test
-    // Пример:
-    // tcase_add_test(tc_core, test_s21_from_int_to_decimal_basic);
+  // TODO: Dev 3 - добавляйте тесты здесь через tcase_add_test
+  // Пример:
+  // tcase_add_test(tc_core, test_s21_from_int_to_decimal_basic);
 
-    suite_add_tcase(s, tc_core);
-    return s;
+  suite_add_tcase(s, tc_core);
+  return s;
 }

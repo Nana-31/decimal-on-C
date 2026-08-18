@@ -17,11 +17,11 @@
 /**
  * @brief Режимы округления для внутренних функций.
  */
-typedef enum
-{
-    S21_ROUND_TRUNCATE = 0, ///< Отбрасывание дробной части (округление к нулю)
-    S21_ROUND_HALF_UP = 1,  ///< Арифметическое округление (>= 0.5 округляется вверх)
-    S21_ROUND_HALF_EVEN = 2 ///< Банковское округление (до ближайшего четного)
+typedef enum {
+  S21_ROUND_TRUNCATE = 0,  ///< Отбрасывание дробной части (округление к нулю)
+  S21_ROUND_HALF_UP =
+      1,  ///< Арифметическое округление (>= 0.5 округляется вверх)
+  S21_ROUND_HALF_EVEN = 2  ///< Банковское округление (до ближайшего четного)
 } s21_rounding_mode;
 
 /* ======================================================================== */
@@ -91,7 +91,8 @@ int s21_is_zero(const s21_decimal *value);
 
 /**
  * @brief Сравнивает модули (абсолютные значения) двух чисел, игнорируя знак.
- * @note Масштаб (scale) при сравнении не учитывается. Сравниваются только 96 бит мантиссы.
+ * @note Масштаб (scale) при сравнении не учитывается. Сравниваются только 96
+ * бит мантиссы.
  * @param a Указатель на первое число.
  * @param b Указатель на второе число.
  * @return int 1, если |a| > |b|; -1, если |a| < |b|; 0, если |a| == |b|.
@@ -110,7 +111,8 @@ int s21_bigint_cmp_abs(const s21_decimal *a, const s21_decimal *b);
  * @param result Указатель на структуру для записи результата.
  * @return int S21_OK при успехе, S21_ERROR_TOO_LARGE при переполнении 96 бит.
  */
-int s21_bigint_add(const s21_decimal *a, const s21_decimal *b, s21_decimal *result);
+int s21_bigint_add(const s21_decimal *a, const s21_decimal *b,
+                   s21_decimal *result);
 
 /**
  * @brief Вычитает мантиссу b из мантиссы a как беззнаковые 96-битные числа.
@@ -120,7 +122,8 @@ int s21_bigint_add(const s21_decimal *a, const s21_decimal *b, s21_decimal *resu
  * @param result Указатель на структуру для записи результата.
  * @return int S21_OK при успехе.
  */
-int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b, s21_decimal *result);
+int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b,
+                   s21_decimal *result);
 
 /**
  * @brief Делит 96-битную мантиссу числа на 10.
@@ -128,7 +131,8 @@ int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b, s21_decimal *resu
  * @param value Указатель на число (мантисса будет изменена).
  * @param remainder Указатель на переменную для записи остатка от деления (0-9).
  *                  Нужен для принятия решения об округлении.
- * @return int S21_OK при успехе, S21_ERROR_CALCULATION при ошибке (например, NULL).
+ * @return int S21_OK при успехе, S21_ERROR_CALCULATION при ошибке (например,
+ * NULL).
  */
 int s21_div_mantissa_by_10(s21_decimal *value, int *remainder);
 
@@ -138,7 +142,8 @@ int s21_div_mantissa_by_10(s21_decimal *value, int *remainder);
 
 /**
  * @brief Сдвигает 96-битную мантиссу числа влево на указанное количество бит.
- * @note Знак и scale не изменяются. Биты, выходящие за пределы 96 бит, теряются.
+ * @note Знак и scale не изменяются. Биты, выходящие за пределы 96 бит,
+ * теряются.
  * @param value Указатель на число.
  * @param shift_bits Количество бит для сдвига (0 <= shift_bits <= 96).
  */
@@ -146,7 +151,8 @@ void s21_bigint_shift_left(s21_decimal *value, int shift_bits);
 
 /**
  * @brief Сдвигает 96-битную мантиссу числа вправо на указанное количество бит.
- * @note Знак и scale не изменяются. Освобождающиеся старшие биты заполняются нулями.
+ * @note Знак и scale не изменяются. Освобождающиеся старшие биты заполняются
+ * нулями.
  * @param value Указатель на число.
  * @param shift_bits Количество бит для сдвига (0 <= shift_bits <= 96).
  */
@@ -160,10 +166,12 @@ void s21_bigint_shift_right(s21_decimal *value, int shift_bits);
  * @brief Приводит два числа к общему масштабу (scale) путем умножения мантиссы
  *        числа с меньшим scale на 10.
  * @note Возвращает ошибку, если в процессе умножения происходит переполнение
- *       96-битной мантиссы ИЛИ если scale достигает 28, а числа все еще не выровнены.
+ *       96-битной мантиссы ИЛИ если scale достигает 28, а числа все еще не
+ * выровнены.
  * @param a Указатель на первое число (будет изменено).
  * @param b Указатель на второе число (будет изменено).
- * @return int S21_OK при успехе, S21_ERROR_CALCULATION при невозможности выравнивания.
+ * @return int S21_OK при успехе, S21_ERROR_CALCULATION при невозможности
+ * выравнивания.
  */
 int s21_normalize(s21_decimal *a, s21_decimal *b);
 
@@ -177,12 +185,17 @@ int s21_normalize(s21_decimal *a, s21_decimal *b);
 int s21_mul_mantissa_by_10(s21_decimal *value);
 
 /**
- * @brief Округляет число до заданного масштаба (target_scale) путем деления на 10.
- * @param value Указатель на число (будет изменено: scale уменьшится, мантисса разделится).
+ * @brief Округляет число до заданного масштаба (target_scale) путем деления
+ * на 10.
+ * @param value Указатель на число (будет изменено: scale уменьшится, мантисса
+ * разделится).
  * @param target_scale Целевой масштаб (0 <= target_scale <= 28).
- * @param mode Режим округления (S21_ROUND_TRUNCATE, S21_ROUND_HALF_UP, S21_ROUND_HALF_EVEN).
- * @return int S21_OK при успехе, S21_ERROR_CALCULATION при некорректных параметрах.
+ * @param mode Режим округления (S21_ROUND_TRUNCATE, S21_ROUND_HALF_UP,
+ * S21_ROUND_HALF_EVEN).
+ * @return int S21_OK при успехе, S21_ERROR_CALCULATION при некорректных
+ * параметрах.
  */
-int s21_round_to_scale(s21_decimal *value, int target_scale, s21_rounding_mode mode);
+int s21_round_to_scale(s21_decimal *value, int target_scale,
+                       s21_rounding_mode mode);
 
-#endif // S21_HELPERS_H_
+#endif  // S21_HELPERS_H_

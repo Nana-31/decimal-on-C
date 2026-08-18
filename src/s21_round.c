@@ -28,10 +28,9 @@
  * @param result Указатель на структуру для записи результата.
  * @return int S21_OK при успехе, S21_ERROR_CALCULATION при ошибке.
  */
-int s21_round(s21_decimal value, s21_decimal *result)
-{
-    (void)value;
-    (void)result;
-    // TODO: Реализация математического округления
-    return S21_OK;
+int s21_round(s21_decimal value, s21_decimal *result) {
+  (void)value;
+  (void)result;
+  // TODO: Реализация математического округления
+  return S21_OK;
 }

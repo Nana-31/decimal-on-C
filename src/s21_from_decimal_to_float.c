@@ -24,10 +24,9 @@
  * @param dst Указатель на переменную для записи результата.
  * @return int S21_OK при успехе, S21_ERROR_CONVERSION при ошибке.
  */
-int s21_from_decimal_to_float(s21_decimal src, float *dst)
-{
-    (void)src;
-    (void)dst;
-    // TODO: Реализация конвертации
-    return S21_OK;
+int s21_from_decimal_to_float(s21_decimal src, float *dst) {
+  (void)src;
+  (void)dst;
+  // TODO: Реализация конвертации
+  return S21_OK;
 }

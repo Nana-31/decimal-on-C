@@ -20,10 +20,9 @@
  * @param dst Указатель на структуру для записи результата.
  * @return int S21_OK при успехе, S21_ERROR_CONVERSION при ошибке.
  */
-int s21_from_int_to_decimal(int src, s21_decimal *dst)
-{
-    (void)src;
-    (void)dst;
-    // TODO: Реализация конвертации
-    return S21_OK;
+int s21_from_int_to_decimal(int src, s21_decimal *dst) {
+  (void)src;
+  (void)dst;
+  // TODO: Реализация конвертации
+  return S21_OK;
 }

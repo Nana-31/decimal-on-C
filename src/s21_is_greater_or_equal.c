@@ -20,10 +20,9 @@
  * @param value_2 Второе число.
  * @return int 1, если value_1 >= value_2, иначе 0.
  */
-int s21_is_greater_or_equal(s21_decimal value_1, s21_decimal value_2)
-{
-    (void)value_1;
-    (void)value_2;
-    // TODO: Реализация сравнения
-    return 0;
+int s21_is_greater_or_equal(s21_decimal value_1, s21_decimal value_2) {
+  (void)value_1;
+  (void)value_2;
+  // TODO: Реализация сравнения
+  return 0;
 }

@@ -7,13 +7,12 @@
 
 #include "../s21_decimal.h"
 
-Suite *s21_add_sub_suite(void)
-{
-    Suite *s = suite_create("s21_add_sub");
-    TCase *tc_core = tcase_create("Core");
+Suite *s21_add_sub_suite(void) {
+  Suite *s = suite_create("s21_add_sub");
+  TCase *tc_core = tcase_create("Core");
 
-    // TODO: Тимлид - добавляйте тесты для add, sub
+  // TODO: Тимлид - добавляйте тесты для add, sub
 
-    suite_add_tcase(s, tc_core);
-    return s;
+  suite_add_tcase(s, tc_core);
+  return s;
 }

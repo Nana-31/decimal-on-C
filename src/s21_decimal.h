@@ -24,12 +24,13 @@
  *   0 — OK;
  *   1 — ошибка конвертации / ошибка вычисления.
  */
-#define S21_OK 0                ///< Успешное выполнение операции
-#define S21_ERROR_TOO_LARGE 1   ///< Арифметика: число слишком велико
-#define S21_ERROR_TOO_SMALL 2   ///< Арифметика: число слишком мало
-#define S21_ERROR_DIV_BY_ZERO 3 ///< Арифметика: деление на 0
+#define S21_OK 0  ///< Успешное выполнение операции
+#define S21_ERROR_TOO_LARGE 1  ///< Арифметика: число слишком велико
+#define S21_ERROR_TOO_SMALL 2  ///< Арифметика: число слишком мало
+#define S21_ERROR_DIV_BY_ZERO 3  ///< Арифметика: деление на 0
 #define S21_ERROR_CONVERSION 1  ///< Конвертеры: ошибка конвертации (значение 1)
-#define S21_ERROR_CALCULATION 1 ///< Прочие функции: ошибка вычисления (значение 1)
+#define S21_ERROR_CALCULATION \
+  1  ///< Прочие функции: ошибка вычисления (значение 1)
 
 /**
  * @brief Структура данных для представления десятичного числа (Decimal).
@@ -44,9 +45,8 @@
  *     Указывает количество десятичных знаков после запятой.
  *   - Биты 0-15 и 24-30: зарезервированы, должны быть равны 0.
  */
-typedef struct
-{
-    uint32_t bits[4];
+typedef struct {
+  uint32_t bits[4];
 } s21_decimal;
 
 /* ======================================================================== */
@@ -60,7 +60,8 @@ typedef struct
  * @param value_2 Второе слагаемое.
  * @param result Указатель на структуру для записи результата.
  * @return int S21_OK (0), S21_ERROR_TOO_LARGE (1) или S21_ERROR_TOO_SMALL (2).
- * @note При получении чисел, не вмещающихся в мантиссу, используется банковское округление.
+ * @note При получении чисел, не вмещающихся в мантиссу, используется банковское
+ * округление.
  */
 int s21_add(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
 
@@ -71,7 +72,8 @@ int s21_add(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
  * @param value_2 Вычитаемое.
  * @param result Указатель на структуру для записи результата.
  * @return int S21_OK (0), S21_ERROR_TOO_LARGE (1) или S21_ERROR_TOO_SMALL (2).
- * @note При получении чисел, не вмещающихся в мантиссу, используется банковское округление.
+ * @note При получении чисел, не вмещающихся в мантиссу, используется банковское
+ * округление.
  */
 int s21_sub(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
 
@@ -82,7 +84,8 @@ int s21_sub(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
  * @param value_2 Второй множитель.
  * @param result Указатель на структуру для записи результата.
  * @return int S21_OK (0), S21_ERROR_TOO_LARGE (1) или S21_ERROR_TOO_SMALL (2).
- * @note При получении чисел, не вмещающихся в мантиссу, используется банковское округление.
+ * @note При получении чисел, не вмещающихся в мантиссу, используется банковское
+ * округление.
  */
 int s21_mul(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
 
@@ -92,8 +95,10 @@ int s21_mul(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
  * @param value_1 Делимое.
  * @param value_2 Делитель.
  * @param result Указатель на структуру для записи результата.
- * @return int S21_OK (0), S21_ERROR_TOO_LARGE (1), S21_ERROR_TOO_SMALL (2) или S21_ERROR_DIV_BY_ZERO (3).
- * @note При получении чисел, не вмещающихся в мантиссу, используется банковское округление.
+ * @return int S21_OK (0), S21_ERROR_TOO_LARGE (1), S21_ERROR_TOO_SMALL (2) или
+ * S21_ERROR_DIV_BY_ZERO (3).
+ * @note При получении чисел, не вмещающихся в мантиссу, используется банковское
+ * округление.
  */
 int s21_div(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
 
@@ -169,9 +174,11 @@ int s21_from_int_to_decimal(int src, s21_decimal *dst);
  * @param dst Указатель на структуру для записи результата.
  * @return int S21_OK (0) или S21_ERROR_CONVERSION (1).
  * @note Если 0 < |x| < 1e-28, возвращается ошибка (1) и значение, равное 0.
- * @note Если |x| > 79,228,162,514,264,337,593,543,950,335 или x равен ±Inf, возвращается ошибка (1).
- * @note Если значимых десятичных цифр > 7, значение округляется с использованием банковского
- *       округления к числу, у которого не больше 7 значимых цифр.
+ * @note Если |x| > 79,228,162,514,264,337,593,543,950,335 или x равен ±Inf,
+ * возвращается ошибка (1).
+ * @note Если значимых десятичных цифр > 7, значение округляется с
+ * использованием банковского округления к числу, у которого не больше 7
+ * значимых цифр.
  */
 int s21_from_float_to_decimal(float src, s21_decimal *dst);
 
@@ -181,7 +188,8 @@ int s21_from_float_to_decimal(float src, s21_decimal *dst);
  * @param src Исходное число типа Decimal.
  * @param dst Указатель на переменную для записи результата.
  * @return int S21_OK (0) или S21_ERROR_CONVERSION (1).
- * @note Если в числе есть дробная часть, она отбрасывается (усечение к нулю, например, 0.9 -> 0).
+ * @note Если в числе есть дробная часть, она отбрасывается (усечение к нулю,
+ * например, 0.9 -> 0).
  */
 int s21_from_decimal_to_int(s21_decimal src, int *dst);
 
@@ -199,7 +207,8 @@ int s21_from_decimal_to_float(s21_decimal src, float *dst);
 /* ======================================================================== */
 
 /**
- * @brief Округляет Decimal до ближайшего целого числа в сторону отрицательной бесконечности.
+ * @brief Округляет Decimal до ближайшего целого числа в сторону отрицательной
+ * бесконечности.
  *
  * @param value Исходное число.
  * @param result Указатель на структуру для записи результата.
@@ -208,7 +217,8 @@ int s21_from_decimal_to_float(s21_decimal src, float *dst);
 int s21_floor(s21_decimal value, s21_decimal *result);
 
 /**
- * @brief Округляет Decimal до ближайшего целого числа (математическое округление).
+ * @brief Округляет Decimal до ближайшего целого числа (математическое
+ * округление).
  *
  * @param value Исходное число.
  * @param result Указатель на структуру для записи результата.
@@ -235,4 +245,4 @@ int s21_truncate(s21_decimal value, s21_decimal *result);
  */
 int s21_negate(s21_decimal value, s21_decimal *result);
 
-#endif // S21_DECIMAL_H_
+#endif  // S21_DECIMAL_H_
