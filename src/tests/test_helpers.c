@@ -597,6 +597,193 @@ START_TEST(test_s21_bigint_null_pointers) {
 END_TEST
 
 /* ======================================================================== */
+/*                 ТЕСТЫ ДЛЯ s21_mul_mantissa_by_10                         */
+/* ======================================================================== */
+
+/**
+ * @brief Тест базового умножения мантиссы на 10.
+ */
+START_TEST(test_s21_mul_mantissa_by_10_basic) {
+  s21_decimal value = {{123, 0, 0, 0}};
+  s21_set_scale(&value, 2);
+
+  int status = s21_mul_mantissa_by_10(&value);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(value.bits[0], 1230);
+  ck_assert_int_eq(s21_get_scale(&value), 3);  // Scale увеличился на 1.
+}
+END_TEST
+
+/**
+ * @brief Тест умножения нуля на 10.
+ */
+START_TEST(test_s21_mul_mantissa_by_10_zero) {
+  s21_decimal value = {{0, 0, 0, 0}};
+  s21_set_scale(&value, 5);
+
+  int status = s21_mul_mantissa_by_10(&value);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_int_eq(s21_get_scale(&value), 6);
+}
+END_TEST
+
+/**
+ * @brief Тест умножения с переносом между блоками.
+ */
+START_TEST(test_s21_mul_mantissa_by_10_with_carry) {
+  // 0xFFFFFFFF * 10 = 0x9FFFFFFF6 (перенос во второй блок)
+  s21_decimal value = {{0xFFFFFFFF, 0, 0, 0}};
+  s21_set_scale(&value, 0);
+
+  int status = s21_mul_mantissa_by_10(&value);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(value.bits[0], 0xFFFFFFF6);
+  ck_assert_uint_eq(value.bits[1], 0x9);
+  ck_assert_int_eq(s21_get_scale(&value), 1);
+}
+END_TEST
+
+/**
+ * @brief Тест переполнения при умножении максимального числа.
+ */
+START_TEST(test_s21_mul_mantissa_by_10_overflow) {
+  s21_decimal value = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};
+
+  int status = s21_mul_mantissa_by_10(&value);
+
+  ck_assert_int_eq(status, S21_ERROR_TOO_LARGE);
+}
+END_TEST
+
+/**
+ * @brief Тест ошибки при максимальном scale (28).
+ */
+START_TEST(test_s21_mul_mantissa_by_10_max_scale) {
+  s21_decimal value = {{100, 0, 0, 0}};
+  s21_set_scale(&value, 28);
+
+  int status = s21_mul_mantissa_by_10(&value);
+
+  ck_assert_int_eq(status, S21_ERROR_TOO_LARGE);
+  // Мантисса не должна измениться.
+  ck_assert_uint_eq(value.bits[0], 100);
+  ck_assert_int_eq(s21_get_scale(&value), 28);
+}
+END_TEST
+
+/**
+ * @brief Тест обработки NULL-указателя.
+ */
+START_TEST(test_s21_mul_mantissa_by_10_null) {
+  ck_assert_int_eq(s21_mul_mantissa_by_10(NULL), S21_ERROR_CALCULATION);
+}
+END_TEST
+
+/* ======================================================================== */
+/*                      ТЕСТЫ ДЛЯ s21_normalize                             */
+/* ======================================================================== */
+
+/**
+ * @brief Тест нормализации чисел с одинаковым scale.
+ */
+START_TEST(test_s21_normalize_equal_scales) {
+  s21_decimal a = {{100, 0, 0, 0}};
+  s21_decimal b = {{200, 0, 0, 0}};
+  s21_set_scale(&a, 2);
+  s21_set_scale(&b, 2);
+
+  int status = s21_normalize(&a, &b);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(s21_get_scale(&a), 2);
+  ck_assert_int_eq(s21_get_scale(&b), 2);
+  ck_assert_uint_eq(a.bits[0], 100);
+  ck_assert_uint_eq(b.bits[0], 200);
+}
+END_TEST
+
+/**
+ * @brief Тест нормализации чисел с разными scale.
+ */
+START_TEST(test_s21_normalize_different_scales) {
+  s21_decimal a = {{15, 0, 0, 0}};   // 1.5 (scale=1)
+  s21_decimal b = {{225, 0, 0, 0}};  // 2.25 (scale=2)
+  s21_set_scale(&a, 1);
+  s21_set_scale(&b, 2);
+
+  int status = s21_normalize(&a, &b);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(a.bits[0], 150);  // 1.50
+  ck_assert_int_eq(s21_get_scale(&a), 2);
+  ck_assert_uint_eq(b.bits[0], 225);  // 2.25
+  ck_assert_int_eq(s21_get_scale(&b), 2);
+}
+END_TEST
+
+/**
+ * @brief Тест нормализации с нулем.
+ */
+START_TEST(test_s21_normalize_with_zero) {
+  s21_decimal a = {{0, 0, 0, 0}};    // 0 (scale=0)
+  s21_decimal b = {{123, 0, 0, 0}};  // 1.23 (scale=2)
+  s21_set_scale(&b, 2);
+
+  int status = s21_normalize(&a, &b);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(a.bits[0], 0);
+  ck_assert_int_eq(s21_get_scale(&a), 2);
+  ck_assert_uint_eq(b.bits[0], 123);
+  ck_assert_int_eq(s21_get_scale(&b), 2);
+}
+END_TEST
+
+/**
+ * @brief Тест ошибки при переполнении во время нормализации.
+ */
+START_TEST(test_s21_normalize_overflow) {
+  s21_decimal a = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};  // Max (scale=0)
+  s21_decimal b = {{1, 0, 0, 0}};                             // 0.01 (scale=2)
+  s21_set_scale(&b, 2);
+
+  int status = s21_normalize(&a, &b);
+
+  ck_assert_int_eq(status, S21_ERROR_CALCULATION);
+}
+END_TEST
+
+/**
+ * @brief Тест ошибки при достижении scale=28 во время нормализации.
+ */
+START_TEST(test_s21_normalize_max_scale) {
+  s21_decimal a = {{100, 0, 0, 0}};  // scale=0
+  s21_decimal b = {{200, 0, 0, 0}};  // scale=28
+  s21_set_scale(&b, 28);
+
+  int status = s21_normalize(&a, &b);
+
+  ck_assert_int_eq(status, S21_ERROR_CALCULATION);
+}
+END_TEST
+
+/**
+ * @brief Тест обработки NULL-указателей.
+ */
+START_TEST(test_s21_normalize_null) {
+  s21_decimal a = {{100, 0, 0, 0}};
+
+  ck_assert_int_eq(s21_normalize(NULL, &a), S21_ERROR_CALCULATION);
+  ck_assert_int_eq(s21_normalize(&a, NULL), S21_ERROR_CALCULATION);
+  ck_assert_int_eq(s21_normalize(NULL, NULL), S21_ERROR_CALCULATION);
+}
+END_TEST
+
+/* ======================================================================== */
 /*         TODO: ТЕСТЫ ДЛЯ ХЕЛПЕРОВ, КОТОРЫЕ ЕЩЕ В ЗАГЛУШКАХ                */
 /* ======================================================================== */
 
@@ -615,22 +802,6 @@ END_TEST
 // - test_s21_bigint_shift_right_zero_fill (старшие биты заполняются нулями)
 // - test_s21_bigint_shift_right_zero (сдвиг нуля)
 // - test_s21_bigint_shift_right_null (NULL-указатель)
-
-// TODO: Тимлид — реализуйте хелпер s21_mul_mantissa_by_10 и добавьте тесты:
-// - test_s21_mul_mantissa_by_10_basic (простое умножение)
-// - test_s21_mul_mantissa_by_10_with_scale (проверка увеличения scale)
-// - test_s21_mul_mantissa_by_10_overflow (переполнение 96 бит)
-// - test_s21_mul_mantissa_by_10_max_scale (ошибка при scale=28)
-// - test_s21_mul_mantissa_by_10_zero (умножение нуля)
-// - test_s21_mul_mantissa_by_10_null (NULL-указатель)
-
-// TODO: Тимлид — реализуйте хелпер s21_normalize и добавьте тесты:
-// - test_s21_normalize_equal_scales (scale уже равны)
-// - test_s21_normalize_different_scales (выравнивание scale)
-// - test_s21_normalize_overflow (переполнение мантиссы при нормализации)
-// - test_s21_normalize_max_scale (ошибка при достижении scale=28)
-// - test_s21_normalize_zero (нормализация с нулем)
-// - test_s21_normalize_null (NULL-указатели)
 
 /* ======================================================================== */
 /*                         СБОРКА СЬЮТА (SUITE)                             */
@@ -679,7 +850,7 @@ Suite *s21_helpers_suite(void) {
   tcase_add_test(tc_arithmetic, test_s21_round_to_scale_target_greater);
   tcase_add_test(tc_arithmetic, test_s21_round_to_scale_invalid);
 
-  // === НОВЫЕ ТЕСТЫ ДЛЯ ADD/SUB ===
+  // === ТЕСТЫ ДЛЯ ADD/SUB ===
   tcase_add_test(tc_arithmetic, test_s21_bigint_add_basic);
   tcase_add_test(tc_arithmetic, test_s21_bigint_add_with_carry);
   tcase_add_test(tc_arithmetic, test_s21_bigint_add_multi_block_carry);
@@ -689,6 +860,22 @@ Suite *s21_helpers_suite(void) {
   tcase_add_test(tc_arithmetic, test_s21_bigint_sub_with_borrow);
   tcase_add_test(tc_arithmetic, test_s21_bigint_sub_equal);
   tcase_add_test(tc_arithmetic, test_s21_bigint_null_pointers);
+
+  // Тесты для mul_by_10
+  tcase_add_test(tc_arithmetic, test_s21_mul_mantissa_by_10_basic);
+  tcase_add_test(tc_arithmetic, test_s21_mul_mantissa_by_10_zero);
+  tcase_add_test(tc_arithmetic, test_s21_mul_mantissa_by_10_with_carry);
+  tcase_add_test(tc_arithmetic, test_s21_mul_mantissa_by_10_overflow);
+  tcase_add_test(tc_arithmetic, test_s21_mul_mantissa_by_10_max_scale);
+  tcase_add_test(tc_arithmetic, test_s21_mul_mantissa_by_10_null);
+
+  // Тесты для normalize
+  tcase_add_test(tc_arithmetic, test_s21_normalize_equal_scales);
+  tcase_add_test(tc_arithmetic, test_s21_normalize_different_scales);
+  tcase_add_test(tc_arithmetic, test_s21_normalize_with_zero);
+  tcase_add_test(tc_arithmetic, test_s21_normalize_overflow);
+  tcase_add_test(tc_arithmetic, test_s21_normalize_max_scale);
+  tcase_add_test(tc_arithmetic, test_s21_normalize_null);
 
   suite_add_tcase(s, tc_basic);
   suite_add_tcase(s, tc_arithmetic);

@@ -257,32 +257,53 @@ void s21_bigint_shift_right(s21_decimal *value, int shift_bits) {
 
 /**
  * @brief Приводит два числа к общему масштабу (scale).
- * @param a Указатель на первое число (будет изменено).
- * @param b Указатель на второе число (будет изменено).
- * @return int S21_OK при успехе, S21_ERROR_CALCULATION при невозможности
- * выравнивания.
- * @todo Реализовать умножение мантиссы на 10 в цикле до выравнивания scale.
  */
 int s21_normalize(s21_decimal *a, s21_decimal *b) {
-  (void)a;
-  (void)b;
-  // TODO: Реализовать умножение мантиссы на 10 в цикле до выравнивания scale
-  return S21_ERROR_CALCULATION;
+  if (!a || !b) return S21_ERROR_CALCULATION;
+
+  int scale_a = s21_get_scale(a);
+  int scale_b = s21_get_scale(b);
+
+  // Умножаем число с меньшим scale на 10, пока scale не сравняются
+  while (scale_a < scale_b) {
+    if (s21_mul_mantissa_by_10(a) != S21_OK) {
+      return S21_ERROR_CALCULATION;  // Переполнение при нормализации
+    }
+    scale_a = s21_get_scale(a);
+  }
+
+  while (scale_b < scale_a) {
+    if (s21_mul_mantissa_by_10(b) != S21_OK) {
+      return S21_ERROR_CALCULATION;
+    }
+    scale_b = s21_get_scale(b);
+  }
+
+  return S21_OK;
 }
 
 /**
  * @brief Умножает мантиссу числа на 10 и увеличивает его scale на 1.
- * @param value Указатель на число.
- * @return int S21_OK при успехе, S21_ERROR_TOO_LARGE при переполнении 96 бит
- *         или если scale уже равен 28.
- * @todo Реализовать умножение каждого блока на 10 с учетом переноса и проверкой
- * scale.
  */
 int s21_mul_mantissa_by_10(s21_decimal *value) {
-  (void)value;
-  // TODO: Реализовать умножение каждого блока на 10 с учетом переноса и
-  // проверкой scale
-  return S21_ERROR_TOO_LARGE;
+  if (!value) return S21_ERROR_CALCULATION;
+
+  int scale = s21_get_scale(value);
+  if (scale >= 28) return S21_ERROR_TOO_LARGE;  // Превышен максимальный scale
+
+  uint64_t carry = 0;
+  for (int i = 0; i < 3; i++) {
+    uint64_t temp = (uint64_t)value->bits[i] * 10 + carry;
+    value->bits[i] = (uint32_t)(temp & 0xFFFFFFFF);
+    carry = temp >> 32;
+  }
+
+  if (carry > 0) {
+    return S21_ERROR_TOO_LARGE;  // Переполнение 96-битной мантиссы
+  }
+
+  s21_set_scale(value, scale + 1);
+  return S21_OK;
 }
 
 /**
