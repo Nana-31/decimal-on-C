@@ -784,24 +784,341 @@ START_TEST(test_s21_normalize_null) {
 END_TEST
 
 /* ======================================================================== */
-/*         TODO: ТЕСТЫ ДЛЯ ХЕЛПЕРОВ, КОТОРЫЕ ЕЩЕ В ЗАГЛУШКАХ                */
+/*               ТЕСТЫ ДЛЯ БИТОВЫХ СДВИГОВ (SHIFT LEFT/RIGHT)               */
 /* ======================================================================== */
 
-// TODO: Тимлид — реализуйте хелпер s21_bigint_shift_left и добавьте тесты:
-// - test_s21_bigint_shift_left_basic (сдвиг на 1 бит)
-// - test_s21_bigint_shift_left_32 (сдвиг на 32 бита — переход между блоками)
-// - test_s21_bigint_shift_left_64 (сдвиг на 64 бита)
-// - test_s21_bigint_shift_left_overflow (сдвиг за пределы 96 бит)
-// - test_s21_bigint_shift_left_zero (сдвиг нуля)
-// - test_s21_bigint_shift_left_null (NULL-указатель)
+/**
+ * @brief Тест базового сдвига влево на 1 бит.
+ */
+START_TEST(test_s21_bigint_shift_left_basic) {
+  s21_decimal value = {{1, 0, 0, 0}};
 
-// TODO: Тимлид — реализуйте хелпер s21_bigint_shift_right и добавьте тесты:
-// - test_s21_bigint_shift_right_basic (сдвиг на 1 бит)
-// - test_s21_bigint_shift_right_32 (сдвиг на 32 бита)
-// - test_s21_bigint_shift_right_64 (сдвиг на 64 бита)
-// - test_s21_bigint_shift_right_zero_fill (старшие биты заполняются нулями)
-// - test_s21_bigint_shift_right_zero (сдвиг нуля)
-// - test_s21_bigint_shift_right_null (NULL-указатель)
+  s21_bigint_shift_left(&value, 1);
+
+  ck_assert_uint_eq(value.bits[0], 2);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 32 бита (переход между блоками).
+ */
+START_TEST(test_s21_bigint_shift_left_32) {
+  s21_decimal value = {{0xFFFFFFFF, 0, 0, 0}};
+
+  s21_bigint_shift_left(&value, 32);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0xFFFFFFFF);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 64 бита.
+ */
+START_TEST(test_s21_bigint_shift_left_64) {
+  s21_decimal value = {{1, 0, 0, 0}};
+
+  s21_bigint_shift_left(&value, 64);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 1);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево с потерей битов (переполнение 96 бит).
+ */
+START_TEST(test_s21_bigint_shift_left_overflow) {
+  s21_decimal value = {{0x80000000, 0, 0, 0}};  // Бит 31 установлен.
+
+  s21_bigint_shift_left(&value, 1);
+
+  // Бит 31 должен перейти в бит 0 второго блока.
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 1);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 96 бит (полное обнуление).
+ */
+START_TEST(test_s21_bigint_shift_left_96) {
+  s21_decimal value = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};
+
+  s21_bigint_shift_left(&value, 96);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево нуля.
+ */
+START_TEST(test_s21_bigint_shift_left_zero) {
+  s21_decimal value = {{0, 0, 0, 0}};
+
+  s21_bigint_shift_left(&value, 10);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево с NULL-указателем.
+ */
+START_TEST(test_s21_bigint_shift_left_null) {
+  s21_bigint_shift_left(NULL, 10);  // Не должно упасть.
+}
+END_TEST
+
+/**
+ * @brief Тест базового сдвига вправо на 1 бит.
+ */
+START_TEST(test_s21_bigint_shift_right_basic) {
+  s21_decimal value = {{2, 0, 0, 0}};
+
+  s21_bigint_shift_right(&value, 1);
+
+  ck_assert_uint_eq(value.bits[0], 1);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо на 32 бита (переход между блоками).
+ */
+START_TEST(test_s21_bigint_shift_right_32) {
+  s21_decimal value = {{0, 0xFFFFFFFF, 0, 0}};
+
+  s21_bigint_shift_right(&value, 32);
+
+  ck_assert_uint_eq(value.bits[0], 0xFFFFFFFF);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо на 64 бита.
+ */
+START_TEST(test_s21_bigint_shift_right_64) {
+  s21_decimal value = {{0, 0, 1, 0}};
+
+  s21_bigint_shift_right(&value, 64);
+
+  ck_assert_uint_eq(value.bits[0], 1);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо с заполнением старших битов нулями.
+ */
+START_TEST(test_s21_bigint_shift_right_zero_fill) {
+  s21_decimal value = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};
+
+  s21_bigint_shift_right(&value, 32);
+
+  ck_assert_uint_eq(value.bits[0], 0xFFFFFFFF);
+  ck_assert_uint_eq(value.bits[1], 0xFFFFFFFF);
+  ck_assert_uint_eq(value.bits[2], 0);  // Старший блок обнулен.
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо на 96 бит (полное обнуление).
+ */
+START_TEST(test_s21_bigint_shift_right_96) {
+  s21_decimal value = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};
+
+  s21_bigint_shift_right(&value, 96);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо нуля.
+ */
+START_TEST(test_s21_bigint_shift_right_zero) {
+  s21_decimal value = {{0, 0, 0, 0}};
+
+  s21_bigint_shift_right(&value, 10);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо с NULL-указателем.
+ */
+START_TEST(test_s21_bigint_shift_right_null) {
+  s21_bigint_shift_right(NULL, 10);  // Не должно упасть.
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 0 бит (ничего не должно измениться).
+ */
+START_TEST(test_s21_bigint_shift_left_zero_bits) {
+  s21_decimal value = {{123, 456, 789, 0}};
+  s21_set_sign(&value, 1);
+  s21_set_scale(&value, 5);
+
+  s21_bigint_shift_left(&value, 0);
+
+  ck_assert_uint_eq(value.bits[0], 123);
+  ck_assert_uint_eq(value.bits[1], 456);
+  ck_assert_uint_eq(value.bits[2], 789);
+  ck_assert_int_eq(s21_get_sign(&value), 1);  // Знак не изменился.
+  ck_assert_int_eq(s21_get_scale(&value), 5);  // Scale не изменился.
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на отрицательное число бит.
+ */
+START_TEST(test_s21_bigint_shift_left_negative) {
+  s21_decimal value = {{123, 0, 0, 0}};
+
+  s21_bigint_shift_left(&value, -5);
+
+  ck_assert_uint_eq(value.bits[0], 123);  // Ничего не изменилось.
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 100 бит (> 96, полное обнуление).
+ */
+START_TEST(test_s21_bigint_shift_left_100) {
+  s21_decimal value = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};
+
+  s21_bigint_shift_left(&value, 100);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 33 бита (32 + 1, комбинированный сдвиг).
+ */
+START_TEST(test_s21_bigint_shift_left_33) {
+  s21_decimal value = {{1, 0, 0, 0}};
+
+  s21_bigint_shift_left(&value, 33);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 2);  // 1 << 33 = 2 в блоке 1.
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 31 бит (граничный случай перед переходом блока).
+ */
+START_TEST(test_s21_bigint_shift_left_31) {
+  s21_decimal value = {{3, 0, 0, 0}};
+
+  s21_bigint_shift_left(&value, 31);
+
+  ck_assert_uint_eq(
+      value.bits[0],
+      0x80000000);  // 3 << 31 = 0x180000000, младшие 32 бита = 0x80000000.
+  ck_assert_uint_eq(value.bits[1], 1);  // Старший бит перешел в блок 1.
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево на 95 бит (граничный случай перед полным
+ * обнулением).
+ */
+START_TEST(test_s21_bigint_shift_left_95) {
+  s21_decimal value = {{1, 0, 0, 0}};
+
+  s21_bigint_shift_left(&value, 95);
+
+  ck_assert_uint_eq(value.bits[0], 0);
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0x80000000);  // 1 << 95 = бит 31 в блоке 2.
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига влево с проверкой, что знак и scale не меняются.
+ */
+START_TEST(test_s21_bigint_shift_left_preserves_sign_scale) {
+  s21_decimal value = {{100, 0, 0, 0}};
+  s21_set_sign(&value, 1);
+  s21_set_scale(&value, 10);
+
+  s21_bigint_shift_left(&value, 5);
+
+  ck_assert_int_eq(s21_get_sign(&value), 1);  // Знак не изменился.
+  ck_assert_int_eq(s21_get_scale(&value), 10);  // Scale не изменился.
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо на 0 бит (ничего не должно измениться).
+ */
+START_TEST(test_s21_bigint_shift_right_zero_bits) {
+  s21_decimal value = {{123, 456, 789, 0}};
+  s21_set_sign(&value, 1);
+  s21_set_scale(&value, 5);
+
+  s21_bigint_shift_right(&value, 0);
+
+  ck_assert_uint_eq(value.bits[0], 123);
+  ck_assert_uint_eq(value.bits[1], 456);
+  ck_assert_uint_eq(value.bits[2], 789);
+  ck_assert_int_eq(s21_get_sign(&value), 1);  // Знак не изменился.
+  ck_assert_int_eq(s21_get_scale(&value), 5);  // Scale не изменился.
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо на 33 бита (32 + 1, комбинированный сдвиг).
+ */
+START_TEST(test_s21_bigint_shift_right_33) {
+  s21_decimal value = {{0, 2, 0, 0}};
+
+  s21_bigint_shift_right(&value, 33);
+
+  ck_assert_uint_eq(value.bits[0], 1);  // 2 >> 33 = 1 в блоке 0.
+  ck_assert_uint_eq(value.bits[1], 0);
+  ck_assert_uint_eq(value.bits[2], 0);
+}
+END_TEST
+
+/**
+ * @brief Тест сдвига вправо с потерей младших битов.
+ */
+START_TEST(test_s21_bigint_shift_right_loss_of_bits) {
+  s21_decimal value = {{7, 0, 0, 0}};  // 7 = 0b111.
+
+  s21_bigint_shift_right(&value, 1);
+
+  ck_assert_uint_eq(value.bits[0], 3);  // 7 >> 1 = 3 (бит 0 потерян).
+}
+END_TEST
 
 /* ======================================================================== */
 /*                         СБОРКА СЬЮТА (SUITE)                             */
@@ -876,6 +1193,36 @@ Suite *s21_helpers_suite(void) {
   tcase_add_test(tc_arithmetic, test_s21_normalize_overflow);
   tcase_add_test(tc_arithmetic, test_s21_normalize_max_scale);
   tcase_add_test(tc_arithmetic, test_s21_normalize_null);
+
+  // Тесты битовых сдвигов
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_basic);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_32);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_64);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_overflow);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_96);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_zero);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_null);
+
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_basic);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_32);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_64);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_zero_fill);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_96);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_zero);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_null);
+
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_zero_bits);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_negative);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_100);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_33);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_31);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_left_95);
+  tcase_add_test(tc_arithmetic,
+                 test_s21_bigint_shift_left_preserves_sign_scale);
+
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_zero_bits);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_33);
+  tcase_add_test(tc_arithmetic, test_s21_bigint_shift_right_loss_of_bits);
 
   suite_add_tcase(s, tc_basic);
   suite_add_tcase(s, tc_arithmetic);

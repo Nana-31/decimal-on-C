@@ -229,26 +229,87 @@ int s21_div_mantissa_by_10(s21_decimal *value, int *remainder) {
 
 /**
  * @brief Сдвигает 96-битную мантиссу числа влево на указанное количество бит.
- * @param value Указатель на число.
- * @param shift_bits Количество бит для сдвига (0 <= shift_bits <= 96).
- * @todo Реализовать побитовый сдвиг с переносом между блоками.
+ * @note Знак и scale не изменяются. Биты, выходящие за пределы 96 бит,
+ * теряются.
  */
 void s21_bigint_shift_left(s21_decimal *value, int shift_bits) {
-  (void)value;
-  (void)shift_bits;
-  // TODO: Реализовать побитовый сдвиг с переносом между блоками
+  if (!value || shift_bits <= 0) return;
+
+  if (shift_bits >= 96) {
+    // Если сдвиг >= 96 бит, обнуляем мантиссу.
+    value->bits[0] = 0;
+    value->bits[1] = 0;
+    value->bits[2] = 0;
+    return;
+  }
+
+  // Оптимизация: сдвиг на целое количество 32-битных блоков.
+  int block_shift = shift_bits / 32;
+  int bit_shift = shift_bits % 32;
+
+  if (block_shift > 0) {
+    // Сдвигаем блоки от старшего к младшему.
+    for (int i = 2; i >= block_shift; i--) {
+      value->bits[i] = value->bits[i - block_shift];
+    }
+    // Обнуляем младшие блоки.
+    for (int i = 0; i < block_shift; i++) {
+      value->bits[i] = 0;
+    }
+  }
+
+  // Побитовый сдвиг внутри блоков (от старшего к младшему).
+  if (bit_shift > 0) {
+    for (int i = 2; i >= 0; i--) {
+      uint64_t temp = (uint64_t)value->bits[i] << bit_shift;
+      value->bits[i] = (uint32_t)(temp & 0xFFFFFFFF);
+      if (i < 2) {
+        // Переносим старшие биты в следующий (старший) блок.
+        value->bits[i + 1] |= (uint32_t)(temp >> 32);
+      }
+    }
+  }
 }
 
 /**
  * @brief Сдвигает 96-битную мантиссу числа вправо на указанное количество бит.
- * @param value Указатель на число.
- * @param shift_bits Количество бит для сдвига (0 <= shift_bits <= 96).
- * @todo Реализовать побитовый сдвиг с переносом между блоками.
+ * @note Знак и scale не изменяются. Освобождающиеся старшие биты заполняются
+ * нулями.
  */
 void s21_bigint_shift_right(s21_decimal *value, int shift_bits) {
-  (void)value;
-  (void)shift_bits;
-  // TODO: Реализовать побитовый сдвиг с переносом между блоками
+  if (!value || shift_bits <= 0) return;
+
+  if (shift_bits >= 96) {
+    // Если сдвиг >= 96 бит, обнуляем мантиссу.
+    value->bits[0] = 0;
+    value->bits[1] = 0;
+    value->bits[2] = 0;
+    return;
+  }
+
+  // Оптимизация: сдвиг на целое количество 32-битных блоков.
+  int block_shift = shift_bits / 32;
+  int bit_shift = shift_bits % 32;
+
+  if (block_shift > 0) {
+    // Сдвигаем блоки.
+    for (int i = 0; i < 3 - block_shift; i++) {
+      value->bits[i] = value->bits[i + block_shift];
+    }
+    // Обнуляем старшие блоки.
+    for (int i = 3 - block_shift; i < 3; i++) {
+      value->bits[i] = 0;
+    }
+  }
+
+  // Побитовый сдвиг внутри блоков.
+  if (bit_shift > 0) {
+    for (int i = 0; i < 3; i++) {
+      uint64_t temp = ((uint64_t)value->bits[i]) |
+                      ((i < 2) ? ((uint64_t)value->bits[i + 1] << 32) : 0);
+      value->bits[i] = (uint32_t)(temp >> bit_shift);
+    }
+  }
 }
 
 /* ======================================================================== */
