@@ -23,6 +23,15 @@
 int s21_is_equal(s21_decimal value_1, s21_decimal value_2) {
   (void)value_1;
   (void)value_2;
+  int is_zero = 0;
   // TODO: Реализация сравнения
+  if (s21_is_zero(&value_1) == 1 && s21_is_zero(&value_2) == 1) {
+    is_zero = 1;
+  }
+  if (!is_zero) {
+    if (s21_get_sign(&value_1) == s21_get_sign(&value_2)) {
+      
+    }
+  }
   return 0;
 }
