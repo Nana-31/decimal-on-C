@@ -156,35 +156,45 @@ int s21_bigint_cmp_abs(const s21_decimal *a, const s21_decimal *b) {
 
 /**
  * @brief Складывает мантиссы двух чисел как беззнаковые 96-битные целые числа.
- * @param a Указатель на первое слагаемое.
- * @param b Указатель на второе слагаемое.
- * @param result Указатель на структуру для записи результата.
- * @return int S21_OK при успехе, S21_ERROR_TOO_LARGE при переполнении 96 бит.
- * @todo Реализовать сложение с учетом переноса разряда (carry).
  */
 int s21_bigint_add(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
-  (void)a;
-  (void)b;
-  (void)result;
-  // TODO: Реализовать сложение с учетом переноса разряда (carry)
-  return S21_ERROR_TOO_LARGE;
+  if (!a || !b || !result) return S21_ERROR_CALCULATION;
+
+  s21_decimal_zero(result);
+  uint64_t carry = 0;
+
+  for (int i = 0; i < 3; i++) {
+    uint64_t sum = (uint64_t)a->bits[i] + (uint64_t)b->bits[i] + carry;
+    result->bits[i] = (uint32_t)(sum & 0xFFFFFFFF);
+    carry = sum >> 32;
+  }
+
+  return (carry > 0) ? S21_ERROR_TOO_LARGE : S21_OK;
 }
 
 /**
  * @brief Вычитает мантиссу b из мантиссы a как беззнаковые 96-битные числа.
- * @param a Указатель на уменьшаемое.
- * @param b Указатель на вычитаемое.
- * @param result Указатель на структуру для записи результата.
- * @return int S21_OK при успехе.
- * @todo Реализовать вычитание с учетом займа (borrow).
+ * @note Предполагается, что |a| >= |b|.
  */
 int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
-  (void)a;
-  (void)b;
-  (void)result;
-  // TODO: Реализовать вычитание с учетом займа (borrow)
+  if (!a || !b || !result) return S21_ERROR_CALCULATION;
+
+  s21_decimal_zero(result);
+  int borrow = 0;
+
+  for (int i = 0; i < 3; i++) {
+    int64_t diff = (int64_t)a->bits[i] - (int64_t)b->bits[i] - borrow;
+    if (diff < 0) {
+      diff += 0x100000000LL;
+      borrow = 1;
+    } else {
+      borrow = 0;
+    }
+    result->bits[i] = (uint32_t)diff;
+  }
+
   return S21_OK;
 }
 
