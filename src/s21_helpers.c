@@ -160,16 +160,13 @@ int s21_bigint_cmp_abs(const s21_decimal *a, const s21_decimal *b) {
 int s21_bigint_add(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
   if (!a || !b || !result) return S21_ERROR_CALCULATION;
-
-  s21_decimal_zero(result);
   uint64_t carry = 0;
-
   for (int i = 0; i < 3; i++) {
     uint64_t sum = (uint64_t)a->bits[i] + (uint64_t)b->bits[i] + carry;
     result->bits[i] = (uint32_t)(sum & 0xFFFFFFFF);
     carry = sum >> 32;
   }
-
+  result->bits[3] = 0;  // Обнуляем служебные биты
   return (carry > 0) ? S21_ERROR_TOO_LARGE : S21_OK;
 }
 
@@ -180,10 +177,7 @@ int s21_bigint_add(const s21_decimal *a, const s21_decimal *b,
 int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
   if (!a || !b || !result) return S21_ERROR_CALCULATION;
-
-  s21_decimal_zero(result);
   int borrow = 0;
-
   for (int i = 0; i < 3; i++) {
     int64_t diff = (int64_t)a->bits[i] - (int64_t)b->bits[i] - borrow;
     if (diff < 0) {
@@ -194,7 +188,7 @@ int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b,
     }
     result->bits[i] = (uint32_t)diff;
   }
-
+  result->bits[3] = 0;  // Обнуляем служебные биты
   return S21_OK;
 }
 
@@ -260,14 +254,14 @@ void s21_bigint_shift_left(s21_decimal *value, int shift_bits) {
 
   // Побитовый сдвиг внутри блоков (от старшего к младшему).
   if (bit_shift > 0) {
-    for (int i = 2; i >= 0; i--) {
-      uint64_t temp = (uint64_t)value->bits[i] << bit_shift;
-      value->bits[i] = (uint32_t)(temp & 0xFFFFFFFF);
-      if (i < 2) {
-        // Переносим старшие биты в следующий (старший) блок.
-        value->bits[i + 1] |= (uint32_t)(temp >> 32);
-      }
+    uint32_t carry = 0;
+    for (int i = 0; i < 3; i++) {
+      uint64_t temp = ((uint64_t)value->bits[i] << bit_shift) | carry;
+      value->bits[i] = (uint32_t)temp;
+      carry = (uint32_t)(temp >> 32);
     }
+    // Если carry != 0 после обработки последнего блока, биты теряются
+    // (игнорируем)
   }
 }
 
