@@ -493,6 +493,272 @@ START_TEST(test_s21_round_max_scale) {
 END_TEST
 
 /* ======================================================================== */
+/*                            ТЕСТЫ S21_FLOOR                               */
+/* ======================================================================== */
+
+/**
+ * @brief Тест округления вниз положительного числа с дробной частью.
+ */
+START_TEST(test_s21_floor_positive_with_fraction) {
+  s21_decimal a = {{19, 0, 0, 0}};  // 1.9 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 1);  // floor(1.9) = 1
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз положительного целого числа (не меняется).
+ */
+START_TEST(test_s21_floor_positive_integer) {
+  s21_decimal a = {{50, 0, 0, 0}};  // 5.0 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 5);  // floor(5.0) = 5
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз отрицательного числа с дробной частью.
+ *        Ключевой кейс: floor(-1.1) = -2, а НЕ -1!
+ */
+START_TEST(test_s21_floor_negative_with_fraction) {
+  s21_decimal a = {{11, 0, 0, 0}};  // -1.1 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 2);  // floor(-1.1) = -2
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз отрицательного целого числа (не меняется).
+ */
+START_TEST(test_s21_floor_negative_integer) {
+  s21_decimal a = {{50, 0, 0, 0}};  // -5.0 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 5);  // floor(-5.0) = -5
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);  // Знак сохраняется
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз отрицательного числа с половиной.
+ */
+START_TEST(test_s21_floor_negative_half) {
+  s21_decimal a = {{15, 0, 0, 0}};  // -1.5 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 2);  // floor(-1.5) = -2
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз отрицательной дроби, становящейся -1.
+ */
+START_TEST(test_s21_floor_negative_fraction_to_minus_one) {
+  s21_decimal a = {{5, 0, 0, 0}};  // -0.5 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 1);  // floor(-0.5) = -1
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз положительной дроби, становящейся нулем.
+ */
+START_TEST(test_s21_floor_positive_fraction_to_zero) {
+  s21_decimal a = {{5, 0, 0, 0}};  // 0.5 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 0);  // floor(0.5) = 0
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);  // Ноль всегда положительный
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз нуля.
+ */
+START_TEST(test_s21_floor_zero) {
+  s21_decimal a = {{0, 0, 0, 0}};
+  s21_set_scale(&a, 5);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 0);
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз отрицательного нуля (должен дать +0).
+ */
+START_TEST(test_s21_floor_negative_zero) {
+  s21_decimal a = {{0, 0, 0, 0}};
+  s21_set_scale(&a, 3);
+  s21_set_sign(&a, 1);  // Отрицательный ноль
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 0);
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);  // Ноль всегда положительный
+}
+END_TEST
+
+/**
+ * @brief Тест обработки NULL-указателя.
+ */
+START_TEST(test_s21_floor_null) {
+  s21_decimal a = {{100, 0, 0, 0}};
+  ck_assert_int_eq(s21_floor(a, NULL), S21_ERROR_CALCULATION);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз многоблочного отрицательного числа.
+ */
+START_TEST(test_s21_floor_negative_multi_block) {
+  // -(2^64 - 1) / 10 = -1844674407370955161.5 (scale=1)
+  s21_decimal a = {{0xFFFFFFFF, 0xFFFFFFFF, 0, 0}};
+  s21_set_scale(&a, 1);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  // floor = -1844674407370955162 = 0x199999999999999A
+  ck_assert_uint_eq(result.bits[0], 0x9999999A);
+  ck_assert_uint_eq(result.bits[1], 0x19999999);
+  ck_assert_uint_eq(result.bits[2], 0);
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз числа с максимальным scale (28).
+ */
+START_TEST(test_s21_floor_max_scale) {
+  // -0.000...05 (28 знаков после запятой)
+  s21_decimal a = {{5, 0, 0, 0}};
+  s21_set_scale(&a, 28);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 1);  // floor(-0.000...05) = -1
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз максимального положительного числа.
+ */
+START_TEST(test_s21_floor_max_positive) {
+  s21_decimal a = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};
+  s21_set_scale(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз очень маленькой отрицательной дроби.
+ */
+START_TEST(test_s21_floor_tiny_negative_fraction) {
+  s21_decimal a = {{1, 0, 0, 0}};  // -0.0001 (scale=4)
+  s21_set_scale(&a, 4);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 1);  // floor(-0.0001) = -1
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);
+}
+END_TEST
+
+/**
+ * @brief Тест округления вниз отрицательного числа с очень маленькой дробной
+ * частью.
+ */
+START_TEST(test_s21_floor_negative_tiny_fraction) {
+  s21_decimal a = {{10001, 0, 0, 0}};  // -1.0001 (scale=4)
+  s21_set_scale(&a, 4);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_floor(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 2);  // floor(-1.0001) = -2
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);
+}
+END_TEST
+
+/* ======================================================================== */
 /*                         СБОРКА СЬЮТА (SUITE)                             */
 /* ======================================================================== */
 
@@ -536,6 +802,23 @@ Suite *s21_rounding_suite(void) {
   tcase_add_test(tc_core, test_s21_round_with_carry);
   tcase_add_test(tc_core, test_s21_round_multi_block);
   tcase_add_test(tc_core, test_s21_round_max_scale);
+
+  // Тесты для s21_floor
+  tcase_add_test(tc_core, test_s21_floor_positive_with_fraction);
+  tcase_add_test(tc_core, test_s21_floor_positive_integer);
+  tcase_add_test(tc_core, test_s21_floor_negative_with_fraction);
+  tcase_add_test(tc_core, test_s21_floor_negative_integer);
+  tcase_add_test(tc_core, test_s21_floor_negative_half);
+  tcase_add_test(tc_core, test_s21_floor_negative_fraction_to_minus_one);
+  tcase_add_test(tc_core, test_s21_floor_positive_fraction_to_zero);
+  tcase_add_test(tc_core, test_s21_floor_zero);
+  tcase_add_test(tc_core, test_s21_floor_negative_zero);
+  tcase_add_test(tc_core, test_s21_floor_null);
+  tcase_add_test(tc_core, test_s21_floor_negative_multi_block);
+  tcase_add_test(tc_core, test_s21_floor_max_scale);
+  tcase_add_test(tc_core, test_s21_floor_max_positive);
+  tcase_add_test(tc_core, test_s21_floor_tiny_negative_fraction);
+  tcase_add_test(tc_core, test_s21_floor_negative_tiny_fraction);
 
   suite_add_tcase(s, tc_core);
   return s;
