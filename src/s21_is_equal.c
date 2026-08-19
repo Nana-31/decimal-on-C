@@ -21,8 +21,6 @@
  * @return int 1, если value_1 == value_2, иначе 0.
  */
 int s21_is_equal(s21_decimal value_1, s21_decimal value_2) {
-  (void)value_1;
-  (void)value_2;
   int is_zero = 0;
   // TODO: Реализация сравнения
   if (s21_is_zero(&value_1) == 1 && s21_is_zero(&value_2) == 1) {
@@ -30,8 +28,13 @@ int s21_is_equal(s21_decimal value_1, s21_decimal value_2) {
   }
   if (!is_zero) {
     if (s21_get_sign(&value_1) == s21_get_sign(&value_2)) {
-      
+      s21_normalize(&value_1, &value_2);
+      is_zero = (
+        value_1.bits[0] == value_2.bits[0] &&
+        value_1.bits[1] == value_2.bits[1] &&
+        value_1.bits[2] == value_2.bits[2]
+      );
     }
   }
-  return 0;
+  return is_zero;
 }
