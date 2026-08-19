@@ -148,6 +148,162 @@ START_TEST(test_s21_negate_max_value) {
 END_TEST
 
 /* ======================================================================== */
+/*                          ТЕСТЫ S21_TRUNCATE                              */
+/* ======================================================================== */
+
+/**
+ * @brief Тест отбрасывания дробной части положительного числа.
+ */
+START_TEST(test_s21_truncate_positive) {
+  s21_decimal a = {{1234, 0, 0, 0}};  // 12.34 (scale=2)
+  s21_set_scale(&a, 2);
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 12);  // 12.34 -> 12
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);
+}
+END_TEST
+
+/**
+ * @brief Тест отбрасывания дробной части отрицательного числа.
+ */
+START_TEST(test_s21_truncate_negative) {
+  s21_decimal a = {{5678, 0, 0, 0}};  // -56.78 (scale=2)
+  s21_set_scale(&a, 2);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 56);  // -56.78 -> -56
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);  // Знак сохраняется
+}
+END_TEST
+
+/**
+ * @brief Тест числа, которое уже является целым (но с scale=1).
+ */
+START_TEST(test_s21_truncate_already_integer) {
+  s21_decimal a = {{999, 0, 0, 0}};  // 99.9 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 99);  // 99.9 -> 99
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+}
+END_TEST
+
+/**
+ * @brief Тест отбрасывания дробной части у нуля.
+ */
+START_TEST(test_s21_truncate_zero) {
+  s21_decimal a = {{0, 0, 0, 0}};
+  s21_set_scale(&a, 5);
+  s21_set_sign(&a, 1);  // Отрицательный ноль
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 0);
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);  // Ноль всегда положительный
+}
+END_TEST
+
+/**
+ * @brief Тест обработки NULL-указателя.
+ */
+START_TEST(test_s21_truncate_null) {
+  s21_decimal a = {{100, 0, 0, 0}};
+  ck_assert_int_eq(s21_truncate(a, NULL), S21_ERROR_CALCULATION);
+}
+END_TEST
+
+/**
+ * @brief Тест отбрасывания дробной части у числа с максимальным scale (28).
+ */
+START_TEST(test_s21_truncate_max_scale) {
+  s21_decimal a = {{123456789, 0, 0, 0}};
+  s21_set_scale(&a, 28);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 0);  // 0.000000000123456789 -> 0
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 0);  // Ноль всегда положительный
+}
+END_TEST
+
+/**
+ * @brief Тест отбрасывания дробной части у многоблочного числа.
+ */
+START_TEST(test_s21_truncate_multi_block) {
+  // Число с scale=2, мантисса занимает 3 блока
+  s21_decimal a = {{0xFFFFFFFF, 0x12345678, 0x00000001, 0}};
+  s21_set_scale(&a, 2);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  // Мантисса делится на 100 (scale=2), результат должен быть корректным
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result), 1);  // Знак сохраняется
+}
+END_TEST
+
+/**
+ * @brief Тест отрицательного дробного числа, которое при усечении становится
+ * нулем.
+ */
+START_TEST(test_s21_truncate_negative_fraction_to_zero) {
+  s21_decimal a = {{5, 0, 0, 0}};  // -0.5 (scale=1)
+  s21_set_scale(&a, 1);
+  s21_set_sign(&a, 1);
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_uint_eq(result.bits[0], 0);
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+  ck_assert_int_eq(s21_get_sign(&result),
+                   0);  // Результат усечения -0.x должен быть +0
+}
+END_TEST
+
+/**
+ * @brief Тест усечения максимального возможного значения.
+ */
+START_TEST(test_s21_truncate_max_value) {
+  // Максимальное число с 1 знаком после запятой
+  s21_decimal a = {{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0}};
+  s21_set_scale(&a, 1);
+  s21_decimal result;
+
+  int status = s21_truncate(a, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  // Мантисса делится на 10, результат должен быть корректным
+  ck_assert_int_eq(s21_get_scale(&result), 0);
+}
+END_TEST
+
+/* ======================================================================== */
 /*                         СБОРКА СЬЮТА (SUITE)                             */
 /* ======================================================================== */
 
@@ -167,6 +323,17 @@ Suite *s21_rounding_suite(void) {
   tcase_add_test(tc_core, test_s21_negate_double_application);
   tcase_add_test(tc_core, test_s21_negate_multi_block);
   tcase_add_test(tc_core, test_s21_negate_max_value);
+
+  // Тесты для s21_truncate
+  tcase_add_test(tc_core, test_s21_truncate_positive);
+  tcase_add_test(tc_core, test_s21_truncate_negative);
+  tcase_add_test(tc_core, test_s21_truncate_already_integer);
+  tcase_add_test(tc_core, test_s21_truncate_zero);
+  tcase_add_test(tc_core, test_s21_truncate_null);
+  tcase_add_test(tc_core, test_s21_truncate_max_scale);
+  tcase_add_test(tc_core, test_s21_truncate_multi_block);
+  tcase_add_test(tc_core, test_s21_truncate_negative_fraction_to_zero);
+  tcase_add_test(tc_core, test_s21_truncate_max_value);
 
   suite_add_tcase(s, tc_core);
   return s;
