@@ -2,10 +2,10 @@
  * @file s21_from_decimal_to_int.c
  * @brief Реализация преобразования из s21_decimal в int.
  */
- 
+
 #include "s21_decimal.h"
 #include "s21_helpers.h"
- 
+
 /**
  * @brief Преобразует Decimal в целое число (int).
  *
@@ -20,7 +20,7 @@
  */
 int s21_from_decimal_to_int(s21_decimal src, int *dst) {
   int error_code = S21_OK;
- 
+
   if (dst == NULL) {
     error_code = S21_ERROR_CONVERSION;
   } else {
@@ -46,6 +46,6 @@ int s21_from_decimal_to_int(s21_decimal src, int *dst) {
       }
     }
   }
- 
+
   return error_code;
 }

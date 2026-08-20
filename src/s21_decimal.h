@@ -1,8 +1,8 @@
 #ifndef S21_DECIMAL_H_
 #define S21_DECIMAL_H_
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * @brief Коды возврата функций библиотеки s21_decimal.
