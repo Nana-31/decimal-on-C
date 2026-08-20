@@ -21,30 +21,29 @@
  * @return int 1, если value_1 == value_2, иначе 0.
  */
 int s21_is_equal(s21_decimal value_1, s21_decimal value_2) {
-    int is_equal = 0;
+  int is_equal = 0;
 
-    // 1. Нули всегда равны друг другу независимо от знака и масштаба
-    if (s21_is_zero(&value_1) && s21_is_zero(&value_2)) {
-        is_equal = 1;
-    } 
-    // 2. Если не нули, проверяем знаки (если разные — точно не равны)
-    else if (s21_get_sign(&value_1) == s21_get_sign(&value_2)) {
-        
-        // 3. Конвертируем в расширенный тип для безопасной нормализации
-        s21_big_decimal big_1 = {0};
-        s21_big_decimal big_2 = {0};
-        
-        s21_to_big_decimal(value_1, &big_1);
-        s21_to_big_decimal(value_2, &big_2);
+  // 1. Нули всегда равны друг другу независимо от знака и масштаба
+  if (s21_is_zero(&value_1) && s21_is_zero(&value_2)) {
+    is_equal = 1;
+  }
+  // 2. Если не нули, проверяем знаки (если разные — точно не равны)
+  else if (s21_get_sign(&value_1) == s21_get_sign(&value_2)) {
+    // 3. Конвертируем в расширенный тип для безопасной нормализации
+    s21_big_decimal big_1 = {0};
+    s21_big_decimal big_2 = {0};
 
-        // 4. Нормализуем (переполнение нам больше не страшно)
-        s21_normalize_big(&big_1, &big_2);
+    s21_to_big_decimal(value_1, &big_1);
+    s21_to_big_decimal(value_2, &big_2);
 
-        // 5. Сравниваем мантиссы (функция возвращает 0, если мантиссы равны)
-        if (s21_cmp_big_mantissa(&big_1, &big_2) == 0) {
-            is_equal = 1;
-        }
+    // 4. Нормализуем (переполнение нам больше не страшно)
+    s21_normalize_big(&big_1, &big_2);
+
+    // 5. Сравниваем мантиссы (функция возвращает 0, если мантиссы равны)
+    if (s21_cmp_big_mantissa(&big_1, &big_2) == 0) {
+      is_equal = 1;
     }
+  }
 
-    return is_equal;
+  return is_equal;
 }
