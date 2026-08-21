@@ -160,16 +160,13 @@ int s21_bigint_cmp_abs(const s21_decimal *a, const s21_decimal *b) {
 int s21_bigint_add(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
   if (!a || !b || !result) return S21_ERROR_CALCULATION;
-
-  s21_decimal_zero(result);
   uint64_t carry = 0;
-
   for (int i = 0; i < 3; i++) {
     uint64_t sum = (uint64_t)a->bits[i] + (uint64_t)b->bits[i] + carry;
     result->bits[i] = (uint32_t)(sum & 0xFFFFFFFF);
     carry = sum >> 32;
   }
-
+  result->bits[3] = 0;  // Обнуляем служебные биты
   return (carry > 0) ? S21_ERROR_TOO_LARGE : S21_OK;
 }
 
@@ -180,10 +177,7 @@ int s21_bigint_add(const s21_decimal *a, const s21_decimal *b,
 int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b,
                    s21_decimal *result) {
   if (!a || !b || !result) return S21_ERROR_CALCULATION;
-
-  s21_decimal_zero(result);
   int borrow = 0;
-
   for (int i = 0; i < 3; i++) {
     int64_t diff = (int64_t)a->bits[i] - (int64_t)b->bits[i] - borrow;
     if (diff < 0) {
@@ -194,7 +188,7 @@ int s21_bigint_sub(const s21_decimal *a, const s21_decimal *b,
     }
     result->bits[i] = (uint32_t)diff;
   }
-
+  result->bits[3] = 0;  // Обнуляем служебные биты
   return S21_OK;
 }
 
@@ -260,14 +254,14 @@ void s21_bigint_shift_left(s21_decimal *value, int shift_bits) {
 
   // Побитовый сдвиг внутри блоков (от старшего к младшему).
   if (bit_shift > 0) {
-    for (int i = 2; i >= 0; i--) {
-      uint64_t temp = (uint64_t)value->bits[i] << bit_shift;
-      value->bits[i] = (uint32_t)(temp & 0xFFFFFFFF);
-      if (i < 2) {
-        // Переносим старшие биты в следующий (старший) блок.
-        value->bits[i + 1] |= (uint32_t)(temp >> 32);
-      }
+    uint32_t carry = 0;
+    for (int i = 0; i < 3; i++) {
+      uint64_t temp = ((uint64_t)value->bits[i] << bit_shift) | carry;
+      value->bits[i] = (uint32_t)temp;
+      carry = (uint32_t)(temp >> 32);
     }
+    // Если carry != 0 после обработки последнего блока, биты теряются
+    // (игнорируем)
   }
 }
 
@@ -426,4 +420,63 @@ int s21_round_to_scale(s21_decimal *value, int target_scale,
 
   s21_set_scale(value, current_scale);
   return S21_OK;
+}
+
+/* ======================================================================== */
+/*               ФУНКЦИИ ДЛЯ РАБОТЫ С S21_BIG_DECIMAL                    */
+/* ======================================================================== */
+
+// Используется для преобразования из s21_decimal в s21_big_decimal
+void s21_to_big_decimal(s21_decimal src, s21_big_decimal *dst) {
+  for (int i = 0; i < 6; i++) {
+    dst->bits[i] = 0;
+  }
+  // Копируем мантиссу, приводя к беззнаковому типу для безопасности
+  dst->bits[0] = (uint32_t)src.bits[0];
+  dst->bits[1] = (uint32_t)src.bits[1];
+  dst->bits[2] = (uint32_t)src.bits[2];
+
+  dst->scale = s21_get_scale(&src);
+  dst->sign = s21_get_sign(&src);
+}
+
+// умножение s21_big_decimal на 10
+void s21_mul_big_mantissa_by_10(s21_big_decimal *value) {
+  uint64_t carry = 0;
+  for (int i = 0; i < 6; i++) {
+    uint64_t temp = (uint64_t)value->bits[i] * 10 + carry;
+    value->bits[i] = (uint32_t)(temp & 0xFFFFFFFF);
+    carry = temp >> 32;
+  }
+}
+
+// нормализация (приведение к 1 scale) для s21_big_decimal
+void s21_normalize_big(s21_big_decimal *a, s21_big_decimal *b) {
+  // Просто умножаем на 10, переполнение нам больше не страшно!
+  while (a->scale < b->scale) {
+    s21_mul_big_mantissa_by_10(a);
+    a->scale++;
+  }
+  while (b->scale < a->scale) {
+    s21_mul_big_mantissa_by_10(b);
+    b->scale++;
+  }
+}
+
+// Сравнение модулей 2 чисел s21_big_decimal
+int s21_cmp_big_mantissa(const s21_big_decimal *a, const s21_big_decimal *b) {
+  int result = 0;
+  int found = 0;
+
+  for (int i = 5; i >= 0 && !found; i--) {
+    if (a->bits[i] > b->bits[i]) {
+      result = 1;
+      found = 1;
+    } else if (a->bits[i] < b->bits[i]) {
+      result = -1;
+      found = 1;
+    }
+  }
+
+  return result;
 }
