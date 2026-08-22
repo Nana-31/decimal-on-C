@@ -1,197 +1,191 @@
 /**
  * @file s21_from_float_to_decimal.c
- * @brief Реализация преобразования из float в s21_decimal без использования
- * string.h
+ * @brief Реализация преобразования из float в s21_decimal.
  */
-#include <math.h>  // Разрешено для isnan, isinf, fabsf, floor, fmod
-#include <stddef.h>  // Разрешено для NULL
+#include <math.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include "s21_decimal.h"
-#include "s21_helpers.h"
+
+#define S21_DECIMAL_MAX_VAL 7.9228162514264337593543950335e28
+#define S21_DECIMAL_MIN_VAL 1e-28
+#define S21_SIG_DIGITS_MULTIPLIER 1000000.0
+#define S21_MAX_SIG_DIGITS 10000000
 
 /**
- * @brief Округляет double до ближайшего целого банковским методом
- * (округление половинок к чётному), как того требует спецификация Decimal.
- *
- * @param val Значение для округления (val >= 0).
- * @return double Округлённое значение.
+ * @brief Округляет значение double до uint32_t методом банковского округления.
  */
-static double bankers_round(double val) {
-  double floor_val = floor(val);
-  double fractional = val - floor_val;
-  double result;
+static uint32_t bankers_round_uint32(double val) {
+  uint32_t result = 0;
+  double fl = floor(val);
+  double frac = val - fl;
 
-  if (fractional < 0.5) {
-    result = floor_val;
-  } else if (fractional > 0.5) {
-    result = floor_val + 1.0;
-  } else if (fmod(floor_val, 2.0) == 0.0) {
-    result = floor_val;  // Уже чётное — оставляем как есть
+  if (frac < 0.5 - 1e-9) {
+    result = (uint32_t)fl;
+  } else if (frac > 0.5 + 1e-9) {
+    result = (uint32_t)(fl + 1.0);
   } else {
-    result = floor_val + 1.0;  // Нечётное — округляем вверх до чётного
+    uint32_t int_val = (uint32_t)fl;
+    result = (int_val % 2 == 0) ? int_val : int_val + 1;
   }
-
   return result;
 }
 
 /**
- * @brief Умножает 96-битное число (bits[0..2]) на 10 с переносом между
- * словами.
- *
- * Вынесена отдельной функцией, чтобы использовать её в цикле при переносе
- * мантиссы обратно в диапазон scale = 0 для больших чисел (принцип
- * структурного программирования: повторяющийся фрагмент — в подпрограмму).
- *
- * @param dst Decimal, чьи bits[0..2] нужно умножить на 10 (bits[3] не
- * трогается).
+ * @brief Умножает 96-битную мантиссу на 10.
  */
-static void multiply_mantissa_by_ten(s21_decimal *dst) {
-  unsigned long long carry = 0;
-  int i = 0;
-
-  for (i = 0; i < 3; i++) {
-    unsigned long long product =
-        (unsigned long long)(unsigned int)dst->bits[i] * 10ULL + carry;
-    dst->bits[i] = (int)(unsigned int)(product & 0xFFFFFFFFULL);
+static int mul_96_by_10(uint32_t *bits) {
+  uint64_t carry = 0;
+  for (int i = 0; i < 3; i++) {
+    uint64_t product = (uint64_t)bits[i] * 10 + carry;
+    bits[i] = (uint32_t)(product & 0xFFFFFFFF);
     carry = product >> 32;
   }
+  return (carry != 0);
 }
 
 /**
- * @brief Нормализует abs(val) так, чтобы мантисса содержала не более
- * 7 значащих цифр, и подбирает соответствующий scale.
- *
- * @note scale здесь может получиться отрицательным (для чисел >= 10^7) —
- * это не ошибка, а сигнал вызывающей функции, что мантиссу нужно домножить
- * на 10^|scale| и использовать итоговый scale = 0 (см.
- * s21_from_float_to_decimal). Ошибкой считается только случай, когда
- * scale вышел за пределы 28 сверху (число слишком маленькое).
- *
- * @param val Модуль исходного значения (val > 0).
- * @param mantissa Указатель для записи итоговой мантиссы (0..9999999).
- * @param scale Указатель для записи итогового scale (может быть < 0).
- * @return int S21_OK при успехе, S21_ERROR_CONVERSION если число
- * слишком маленькое (scale > 28).
+ * @brief Проверяет, делится ли 96-битная мантисса на 10 (не изменяя её).
  */
-static int normalize_mantissa(double val, unsigned int *mantissa, int *scale) {
-  int error_code = S21_OK;
-  int digit_scale = 0;
+static int is_divisible_by_10(const uint32_t *bits) {
+  uint64_t remainder = 0;
+  for (int i = 2; i >= 0; i--) {
+    uint64_t current = (remainder << 32) | bits[i];
+    remainder = current % 10;
+  }
+  return (remainder == 0) ? 1 : 0;
+}
 
-  while (val < 1000000.0) {
-    val *= 10.0;
-    digit_scale++;
+/**
+ * @brief Делит 96-битную мантиссу на 10 и возвращает остаток.
+ */
+static int div_96_by_10_with_rem(uint32_t *bits) {
+  uint64_t remainder = 0;
+  for (int i = 2; i >= 0; i--) {
+    uint64_t current = (remainder << 32) | bits[i];
+    bits[i] = (uint32_t)(current / 10);
+    remainder = current % 10;
   }
-  while (val >= 10000000.0) {
-    val /= 10.0;
-    digit_scale--;
-  }
+  return (int)remainder;
+}
 
-  unsigned int local_mantissa = (unsigned int)bankers_round(val);
-  if (local_mantissa >= 10000000) {
-    local_mantissa /= 10;
-    digit_scale--;
-  }
-  while (local_mantissa != 0 && local_mantissa % 10 == 0 && digit_scale > 0) {
-    local_mantissa /= 10;
-    digit_scale--;
-  }
-
-  if (digit_scale > 28) {
-    error_code = S21_ERROR_CONVERSION;  // Слишком маленькое значение
+/**
+ * @brief Нормализует значение к диапазону [1.0, 10.0) и считает экспоненту.
+ */
+static void normalize_float_value(double *val, int *exp10) {
+  if (*val >= 1.0) {
+    while (*val >= 10.0) {
+      *val /= 10.0;
+      (*exp10)++;
+    }
   } else {
-    *mantissa = local_mantissa;
-    *scale = digit_scale;
-  }
-
-  return error_code;
-}
-
-/**
- * @brief Записывает знак и scale в bits[3] результата.
- *
- * @param sign 1, если число отрицательное, иначе 0.
- * @param scale Значение scale (0..28).
- * @param dst Указатель на результат (bits уже обнулены).
- */
-static void write_sign_and_scale(int sign, int scale, s21_decimal *dst) {
-  dst->bits[3] |= ((unsigned int)scale << 16);
-  if (sign) {
-    dst->bits[3] |= (1U << 31);
+    while (*val < 1.0) {
+      *val *= 10.0;
+      (*exp10)--;
+    }
   }
 }
 
 /**
- * @brief Приводит мантиссу и scale к финальному виду: если scale
- * отрицательный (число >= 10^7), домножает мантиссу на 10^|scale| и
- * обнуляет scale.
- *
- * Вынесена отдельно, чтобы не наращивать вложенность в основной функции.
- *
- * @param mantissa Мантисса, полученная из normalize_mantissa.
- * @param scale Scale, полученный из normalize_mantissa (может быть < 0).
- * @param dst Указатель на результат (bits[0..2] будут перезаписаны).
- * @return int Итоговый scale (всегда 0..28).
+ * @brief Применяет коррекцию масштаба (умножение или банковское округление).
  */
-static int finalize_mantissa_and_scale(unsigned int mantissa, int scale,
-                                       s21_decimal *dst) {
-  dst->bits[0] = (int)mantissa;
+static int apply_scale_adjustments(uint32_t *bits, int *scale) {
+  int status = S21_OK;
 
-  while (scale < 0) {
-    multiply_mantissa_by_ten(dst);
-    scale++;
+  while (*scale < 0 && status == S21_OK) {
+    if (mul_96_by_10(bits)) {
+      status = S21_ERROR_CONVERSION;
+    }
+    (*scale)++;
   }
 
-  return scale;
+  while (*scale > 28 && status == S21_OK) {
+    int rem = div_96_by_10_with_rem(bits);
+    if (rem > 5 || (rem == 5 && (bits[0] & 1))) {
+      bits[0] += 1;
+      if (bits[0] == 0 && ++bits[1] == 0) {
+        ++bits[2];
+      }
+    }
+    (*scale)--;
+  }
+  return status;
+}
+
+/**
+ * @brief Обрабатывает ненулевое значение float и записывает его в decimal.
+ */
+static int process_non_zero_float(float src, double val, s21_decimal *dst) {
+  int status = S21_OK;
+  int sign = (src < 0.0f) ? 1 : 0;
+  int exp10 = 0;
+
+  normalize_float_value(&val, &exp10);
+
+  val *= S21_SIG_DIGITS_MULTIPLIER;
+  uint32_t mantissa = bankers_round_uint32(val);
+
+  if (mantissa >= S21_MAX_SIG_DIGITS) {
+    mantissa /= 10;
+    exp10++;
+  }
+
+  uint32_t bits[3] = {mantissa, 0, 0};
+  int scale = 6 - exp10;
+
+  status = apply_scale_adjustments(bits, &scale);
+
+  // Удаление конечных нулей (теперь безопасно: сначала проверка, потом деление)
+  while (scale > 0 && status == S21_OK) {
+    if (is_divisible_by_10(bits)) {
+      div_96_by_10_with_rem(bits);
+      scale--;
+    } else {
+      break;
+    }
+  }
+
+  if (status == S21_OK) {
+    dst->bits[0] = (int)bits[0];
+    dst->bits[1] = (int)bits[1];
+    dst->bits[2] = (int)bits[2];
+    dst->bits[3] = ((uint32_t)scale << 16);
+    if (sign) {
+      dst->bits[3] |= 0x80000000;
+    }
+  }
+  return status;
 }
 
 /**
  * @brief Преобразует число с плавающей точкой (float) в формат Decimal.
- *
- * Алгоритм:
- * 1. Проверить указатель dst и специальные значения float (NaN, Inf,
- *    переполнение по модулю, слишком малое ненулевое значение).
- * 2. Обнулить результат; если src == 0, на этом закончить.
- * 3. Нормализовать |src| до мантиссы из не более 7 значащих цифр и
- *    подобрать scale (см. normalize_mantissa), используя банковское
- *    округление.
- * 4. Если scale получился отрицательным (число >= 10^7), домножить
- *    мантиссу на 10^|scale| и привести scale к 0 (см.
- *    finalize_mantissa_and_scale).
- * 5. Записать мантиссу, scale и знак в результат.
- *
- * @param src Исходное число типа float.
- * @param dst Указатель на структуру для записи результата.
- * @return int S21_OK при успехе, S21_ERROR_CONVERSION при переполнении,
- * потере значимости или если src является NaN/Inf.
  */
 int s21_from_float_to_decimal(float src, s21_decimal *dst) {
-  int error_code = S21_OK;
+  int status = S21_OK;
 
-  if (dst == NULL || isnan(src) || isinf(src)) {
-    error_code = S21_ERROR_CONVERSION;
-  } else if (fabsf(src) > 7.9228162514e+28f) {
-    error_code = S21_ERROR_CONVERSION;  // Слишком велико для Decimal
-  } else if (fabsf(src) < 1e-28f && fabsf(src) > 0.0f) {
-    error_code = S21_ERROR_CONVERSION;  // Слишком мало для Decimal
+  // Исключение из правила: предварительная проверка аргументов
+  if (dst == NULL) {
+    return S21_ERROR_CONVERSION;
+  }
+
+  dst->bits[0] = 0;
+  dst->bits[1] = 0;
+  dst->bits[2] = 0;
+  dst->bits[3] = 0;
+
+  if (isnan(src) || isinf(src)) {
+    status = S21_ERROR_CONVERSION;
   } else {
-    dst->bits[0] = 0;
-    dst->bits[1] = 0;
-    dst->bits[2] = 0;
-    dst->bits[3] = 0;
-
-    if (src != 0.0f) {
-      int sign = (src < 0.0f) ? 1 : 0;
-      unsigned int mantissa = 0;
-      int scale = 0;
-
-      error_code = normalize_mantissa((double)fabsf(src), &mantissa, &scale);
-
-      if (error_code == S21_OK) {
-        scale = finalize_mantissa_and_scale(mantissa, scale, dst);
-        write_sign_and_scale(sign, scale, dst);
-      }
+    double val = fabs((double)src);
+    if (val > S21_DECIMAL_MAX_VAL || (val < S21_DECIMAL_MIN_VAL && val > 0.0)) {
+      status = S21_ERROR_CONVERSION;
+    } else if (val == 0.0) {
+      status = S21_OK;
+    } else {
+      status = process_non_zero_float(src, val, dst);
     }
   }
 
-  return error_code;
+  return status;
 }
