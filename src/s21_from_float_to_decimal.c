@@ -3,54 +3,104 @@
  * @brief Реализация преобразования из float в s21_decimal без использования
  * string.h
  */
-#include <math.h>    // Разрешено для isnan, isinf, fabsf, round
+#include <math.h>  // Разрешено для isnan, isinf, fabsf, floor, fmod
 #include <stddef.h>  // Разрешено для NULL
 
 #include "s21_decimal.h"
 #include "s21_helpers.h"
 
 /**
+ * @brief Округляет double до ближайшего целого банковским методом
+ * (округление половинок к чётному), как того требует спецификация Decimal.
+ *
+ * @param val Значение для округления (val >= 0).
+ * @return double Округлённое значение.
+ */
+static double bankers_round(double val) {
+  double floor_val = floor(val);
+  double fractional = val - floor_val;
+  double result;
+
+  if (fractional < 0.5) {
+    result = floor_val;
+  } else if (fractional > 0.5) {
+    result = floor_val + 1.0;
+  } else if (fmod(floor_val, 2.0) == 0.0) {
+    result = floor_val;  // Уже чётное — оставляем как есть
+  } else {
+    result = floor_val + 1.0;  // Нечётное — округляем вверх до чётного
+  }
+
+  return result;
+}
+
+/**
+ * @brief Умножает 96-битное число (bits[0..2]) на 10 с переносом между
+ * словами.
+ *
+ * Вынесена отдельной функцией, чтобы использовать её в цикле при переносе
+ * мантиссы обратно в диапазон scale = 0 для больших чисел (принцип
+ * структурного программирования: повторяющийся фрагмент — в подпрограмму).
+ *
+ * @param dst Decimal, чьи bits[0..2] нужно умножить на 10 (bits[3] не
+ * трогается).
+ */
+static void multiply_mantissa_by_ten(s21_decimal *dst) {
+  unsigned long long carry = 0;
+  int i = 0;
+
+  for (i = 0; i < 3; i++) {
+    unsigned long long product =
+        (unsigned long long)(unsigned int)dst->bits[i] * 10ULL + carry;
+    dst->bits[i] = (int)(unsigned int)(product & 0xFFFFFFFFULL);
+    carry = product >> 32;
+  }
+}
+
+/**
  * @brief Нормализует abs(val) так, чтобы мантисса содержала не более
  * 7 значащих цифр, и подбирает соответствующий scale.
  *
- * Вынесена отдельной функцией, чтобы не наращивать вложенность блоков
- * внутри s21_from_float_to_decimal (принцип структурного
- * программирования: логически целостный фрагмент — в подпрограмму).
+ * @note scale здесь может получиться отрицательным (для чисел >= 10^7) —
+ * это не ошибка, а сигнал вызывающей функции, что мантиссу нужно домножить
+ * на 10^|scale| и использовать итоговый scale = 0 (см.
+ * s21_from_float_to_decimal). Ошибкой считается только случай, когда
+ * scale вышел за пределы 28 сверху (число слишком маленькое).
  *
  * @param val Модуль исходного значения (val > 0).
  * @param mantissa Указатель для записи итоговой мантиссы (0..9999999).
- * @param scale Указатель для записи итогового scale.
- * @return int S21_OK при успехе, S21_ERROR_CONVERSION если scale вышел
- * за пределы 0..28.
+ * @param scale Указатель для записи итогового scale (может быть < 0).
+ * @return int S21_OK при успехе, S21_ERROR_CONVERSION если число
+ * слишком маленькое (scale > 28).
  */
 static int normalize_mantissa(double val, unsigned int *mantissa, int *scale) {
   int error_code = S21_OK;
-  int local_scale = 0;
+  int digit_scale = 0;
 
-  while (val < 1000000.0 && local_scale < 28) {
+  while (val < 1000000.0) {
     val *= 10.0;
-    local_scale++;
+    digit_scale++;
   }
   while (val >= 10000000.0) {
     val /= 10.0;
-    local_scale--;
+    digit_scale--;
   }
 
-  unsigned int local_mantissa = (unsigned int)round(val);
+  unsigned int local_mantissa = (unsigned int)bankers_round(val);
   if (local_mantissa >= 10000000) {
     local_mantissa /= 10;
-    local_scale--;
+    digit_scale--;
   }
-  while (local_mantissa % 10 == 0 && local_scale > 0) {
+  while (local_mantissa != 0 && local_mantissa % 10 == 0 && digit_scale > 0) {
     local_mantissa /= 10;
-    local_scale--;
+    digit_scale--;
   }
 
-  if (local_scale < 0 || local_scale > 28) {
-    error_code = S21_ERROR_CONVERSION;
+  if (digit_scale > 28) {
+    error_code = S21_ERROR_CONVERSION;  // Слишком маленькое значение
   } else {
     *mantissa = local_mantissa;
-    *scale = local_scale;
+    *scale = digit_scale;
   }
 
   return error_code;
@@ -71,6 +121,30 @@ static void write_sign_and_scale(int sign, int scale, s21_decimal *dst) {
 }
 
 /**
+ * @brief Приводит мантиссу и scale к финальному виду: если scale
+ * отрицательный (число >= 10^7), домножает мантиссу на 10^|scale| и
+ * обнуляет scale.
+ *
+ * Вынесена отдельно, чтобы не наращивать вложенность в основной функции.
+ *
+ * @param mantissa Мантисса, полученная из normalize_mantissa.
+ * @param scale Scale, полученный из normalize_mantissa (может быть < 0).
+ * @param dst Указатель на результат (bits[0..2] будут перезаписаны).
+ * @return int Итоговый scale (всегда 0..28).
+ */
+static int finalize_mantissa_and_scale(unsigned int mantissa, int scale,
+                                       s21_decimal *dst) {
+  dst->bits[0] = (int)mantissa;
+
+  while (scale < 0) {
+    multiply_mantissa_by_ten(dst);
+    scale++;
+  }
+
+  return scale;
+}
+
+/**
  * @brief Преобразует число с плавающей точкой (float) в формат Decimal.
  *
  * Алгоритм:
@@ -78,8 +152,12 @@ static void write_sign_and_scale(int sign, int scale, s21_decimal *dst) {
  *    переполнение по модулю, слишком малое ненулевое значение).
  * 2. Обнулить результат; если src == 0, на этом закончить.
  * 3. Нормализовать |src| до мантиссы из не более 7 значащих цифр и
- *    подобрать scale (см. normalize_mantissa).
- * 4. Записать мантиссу, scale и знак в результат.
+ *    подобрать scale (см. normalize_mantissa), используя банковское
+ *    округление.
+ * 4. Если scale получился отрицательным (число >= 10^7), домножить
+ *    мантиссу на 10^|scale| и привести scale к 0 (см.
+ *    finalize_mantissa_and_scale).
+ * 5. Записать мантиссу, scale и знак в результат.
  *
  * @param src Исходное число типа float.
  * @param dst Указатель на структуру для записи результата.
@@ -109,7 +187,7 @@ int s21_from_float_to_decimal(float src, s21_decimal *dst) {
       error_code = normalize_mantissa((double)fabsf(src), &mantissa, &scale);
 
       if (error_code == S21_OK) {
-        dst->bits[0] = mantissa;
+        scale = finalize_mantissa_and_scale(mantissa, scale, dst);
         write_sign_and_scale(sign, scale, dst);
       }
     }

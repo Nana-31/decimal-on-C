@@ -299,6 +299,139 @@ START_TEST(test_s21_from_decimal_to_float_max_scale) {
 END_TEST
 
 /* ======================================================================== */
+/*                         ТЕСТЫ ДЛЯ КОНВЕРТАЦИИ ИЗ FLOAT В DECIMAL         */
+/* ======================================================================== */
+
+START_TEST(test_s21_from_float_to_decimal_basic) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(1234.5f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[0], 12345);
+  ck_assert_int_eq(result.bits[1], 0);
+  ck_assert_int_eq(result.bits[2], 0);
+  ck_assert_int_eq(result.bits[3], (1 << 16));  // scale = 1
+}
+END_TEST
+
+START_TEST(test_s21_from_float_to_decimal_negative) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(-0.12345f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[0], 12345);
+  ck_assert_int_eq(result.bits[3],
+                   (5 << 16) | (1U << 31));  // scale = 5, знак -
+}
+END_TEST
+
+START_TEST(test_s21_from_float_to_decimal_special) {
+  s21_decimal result;
+  int status_nan = s21_from_float_to_decimal(NAN, &result);
+  ck_assert_int_eq(status_nan, S21_ERROR_CONVERSION);
+
+  int status_inf = s21_from_float_to_decimal(INFINITY, &result);
+  ck_assert_int_eq(status_inf, S21_ERROR_CONVERSION);
+}
+END_TEST
+
+START_TEST(test_s21_from_float_to_decimal_overflow) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(1e30f, &result);
+  ck_assert_int_eq(status, S21_ERROR_CONVERSION);
+}
+END_TEST
+
+START_TEST(test_s21_from_float_to_decimal_underflow) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(1e-30f, &result);
+  ck_assert_int_eq(status, S21_ERROR_CONVERSION);
+}
+END_TEST
+
+START_TEST(test_s21_from_float_to_decimal_zero) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(0.0f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[0], 0);
+  ck_assert_int_eq(result.bits[1], 0);
+  ck_assert_int_eq(result.bits[2], 0);
+  ck_assert_int_eq(result.bits[3], 0);
+}
+END_TEST
+
+START_TEST(test_s21_from_float_to_decimal_null) {
+  int status = s21_from_float_to_decimal(1.5f, NULL);
+  ck_assert_int_eq(status, S21_ERROR_CONVERSION);
+}
+END_TEST
+
+/* Регрессионный тест на баг из ревью: числа >= 10^7 раньше отвергались
+ * с S21_ERROR_CONVERSION из-за ухода scale в минус без обработки. */
+START_TEST(test_s21_from_float_to_decimal_large_integer) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(12345670.0f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[0], 12345670);
+  ck_assert_int_eq(result.bits[1], 0);
+  ck_assert_int_eq(result.bits[2], 0);
+  ck_assert_int_eq(result.bits[3], 0);  // scale = 0
+}
+END_TEST
+
+/* Ещё один регрессионный тест на ту же проблему, но с числом, где
+ * мантисса после округления содержит незначащие нули (100000000.0 ->
+ * 7-значная мантисса 1000000, затем домножение на 10^2). */
+START_TEST(test_s21_from_float_to_decimal_large_integer_100m) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(100000000.0f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[0], 100000000);
+  ck_assert_int_eq(result.bits[3], 0);  // scale = 0
+}
+END_TEST
+
+/* Число, требующее больше 32 бит после домножения мантиссы обратно —
+ * проверяет, что перенос между bits[0]/bits[1] работает корректно. */
+START_TEST(test_s21_from_float_to_decimal_large_integer_carries) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(1234567000000000.0f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[3], 0);  // scale = 0
+  // Проверяем, что перенос ушёл в bits[1] (значение точно не влезает в
+  // один 32-битный bits[0]).
+  ck_assert_int_ne(result.bits[1], 0);
+}
+END_TEST
+
+/* Тест на банковское округление: .5 округляется к ближайшему чётному.
+ * 1234564.5 -> должно округлиться ВНИЗ до 1234564 (чётное), а не вверх
+ * до 1234565, как дал бы обычный round(). */
+START_TEST(test_s21_from_float_to_decimal_bankers_rounding_down) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(1234564.5f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[0], 1234564);  // не 1234565
+}
+END_TEST
+
+/* Симметричный случай: 1234565.5 -> должно округлиться ВВЕРХ до
+ * 1234566 (чётное), поскольку 1234565 нечётное. */
+START_TEST(test_s21_from_float_to_decimal_bankers_rounding_up) {
+  s21_decimal result;
+  int status = s21_from_float_to_decimal(1234565.5f, &result);
+
+  ck_assert_int_eq(status, S21_OK);
+  ck_assert_int_eq(result.bits[0], 1234566);
+}
+END_TEST
+
+/* ======================================================================== */
 /*                         СБОРКА СЬЮТА (SUITE)                             */
 /* ======================================================================== */
 
@@ -335,6 +468,19 @@ Suite *s21_converters_suite(void) {
   tcase_add_test(tc_core, test_s21_from_decimal_to_float_max_decimal);
   tcase_add_test(tc_core, test_s21_from_decimal_to_float_zero);
   tcase_add_test(tc_core, test_s21_from_decimal_to_float_max_scale);
+
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_basic);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_negative);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_special);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_overflow);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_underflow);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_zero);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_null);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_large_integer);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_large_integer_100m);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_large_integer_carries);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_bankers_rounding_down);
+  tcase_add_test(tc_core, test_s21_from_float_to_decimal_bankers_rounding_up);
 
   suite_add_tcase(s, tc_core);
   return s;
